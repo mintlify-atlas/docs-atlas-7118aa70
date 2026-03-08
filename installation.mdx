@@ -1,0 +1,266 @@
+---
+title: Installation
+description: Step-by-step instructions to install Envloom on Windows
+---
+
+# Installing Envloom
+
+Envloom is a desktop application for Windows that manages your local development stack. This guide will walk you through the installation process.
+
+## System Requirements
+
+Before installing Envloom, ensure your system meets these requirements:
+
+- **Operating System**: Windows 10 or Windows 11
+- **Architecture**: 64-bit (x64) required
+- **Disk Space**: At least 2 GB free space for Envloom and initial runtimes
+- **Administrator Access**: Required for PATH management, hosts file updates, and service installation
+
+<Note>
+Envloom will request administrator permissions when needed for tasks like updating the hosts file or configuring system PATH.
+</Note>
+
+## Download Envloom
+
+<Steps>
+  <Step title="Download the Installer">
+    Download the latest Envloom installer for Windows from the [GitHub Releases](https://github.com/lepepe/envloom/releases) page.
+    
+    Look for the latest release and download the `.exe` or `.msi` installer file.
+  </Step>
+
+  <Step title="Run the Installer">
+    Once downloaded, run the installer executable. You may see a Windows SmartScreen warning for new software.
+    
+    - Click **"More info"** if prompted by SmartScreen
+    - Then click **"Run anyway"** to proceed with installation
+  </Step>
+
+  <Step title="Follow Installation Wizard">
+    The installer will guide you through the setup process:
+    
+    1. Accept the license agreement
+    2. Choose installation directory (default is recommended)
+    3. Click **Install** to begin installation
+    4. Wait for the installation to complete
+  </Step>
+
+  <Step title="Launch Envloom">
+    After installation completes, launch Envloom from:
+    
+    - The desktop shortcut (if created)
+    - Start Menu → Envloom
+    - Or from the installation directory
+  </Step>
+</Steps>
+
+## First Launch Setup
+
+When you launch Envloom for the first time, it will automatically set up your development environment.
+
+### Automatic Bootstrap
+
+On first launch, Envloom performs the following setup:
+
+<Steps>
+  <Step title="Download PHP">
+    Envloom downloads the latest stable PHP version (thread-safe, x64 build for Windows). This happens with a splash screen showing progress.
+    
+    The PHP binary will be installed in the `bin/php/` directory within Envloom's data folder.
+  </Step>
+
+  <Step title="Install Composer">
+    Composer is automatically downloaded in the background to `bin/composer/composer.phar`.
+    
+    A `composer.cmd` shim is created for global command-line access.
+  </Step>
+
+  <Step title="Set Up NVM (Node Version Manager)">
+    Envloom installs `nvm-windows` locally by downloading the `nvm-noinstall.zip` release from GitHub.
+    
+    This allows you to install and manage multiple Node.js versions. The installation may request elevated permissions to set system environment variables.
+  </Step>
+
+  <Step title="Download Nginx">
+    The latest stable Nginx release is downloaded in the background to `bin/nginx/`.
+    
+    Nginx will be configured and ready to serve your local sites.
+  </Step>
+
+  <Step title="Configure PATH">
+    Envloom adds a single `bin` directory to your system PATH, which contains shims for:
+    
+    - `php` - Current PHP version
+    - `phpXX` - Specific PHP versions (e.g., `php82`, `php83`)
+    - `composer` - PHP Composer
+    - `mysql` / `mariadb` - MariaDB client
+    - `nginx` - Nginx web server
+    - `loom` - Envloom CLI
+  </Step>
+
+  <Step title="Auto-Start Services">
+    If enabled in settings (default), Envloom will automatically start PHP-FPM and Nginx services.
+    
+    You can control this behavior in Settings → Auto-start services.
+  </Step>
+</Steps>
+
+<Note>
+The first launch may take 3-5 minutes while Envloom downloads and configures the required runtimes. Be patient and don't close the application during this process.
+</Note>
+
+## Verify Installation
+
+After the bootstrap completes, verify your installation:
+
+### Check Dashboard
+
+Open the Envloom dashboard and confirm:
+
+- **PHP Status**: Should show "Running" with the installed version
+- **Nginx Status**: Should show "Running" with version number
+- **Services**: Both PHP-FPM and Nginx should have green status indicators
+
+### Test CLI Commands
+
+Open a **new** Command Prompt or PowerShell window and test:
+
+```bash
+# Check PHP version
+php -v
+
+# Check Composer
+composer --version
+
+# Check Envloom CLI
+loom current
+```
+
+<Warning>
+You must open a **new** terminal window after installation for PATH changes to take effect. Existing terminal sessions won't recognize the new commands.
+</Warning>
+
+### Expected Output
+
+The `loom current` command should display something like:
+
+```
+PHP: 8.3
+Node: (not installed)
+MariaDB: (not installed)
+Nginx: 1.25.3
+```
+
+## Post-Installation Configuration
+
+### Install Additional Runtimes
+
+After installation, you can add more runtimes:
+
+1. **MariaDB**: Navigate to the MariaDB page in Envloom and click "Add version" to install your preferred MariaDB version
+2. **Node.js**: Go to the Node page and install the Node.js versions you need
+3. **Additional PHP versions**: Visit the PHP page to install other PHP versions (8.2, 8.1, 7.4, etc.)
+
+### Configure Settings
+
+Open **Settings** in Envloom to configure:
+
+- **Auto-start services**: Automatically start PHP-FPM, Nginx, and MariaDB when Envloom launches
+- **Auto-check updates**: Check for new runtime versions every hour
+- **Start with Windows**: Launch Envloom automatically when Windows starts
+- **Start minimized**: Start in the system tray instead of opening the main window
+
+### System Tray
+
+Envloom runs in the system tray for quick access. Right-click the tray icon to:
+
+- Open the main window
+- Start/stop all services
+- Access site URLs
+- Switch runtime versions
+- Open configuration files and logs
+
+## Installing MariaDB (Optional)
+
+MariaDB is not installed automatically during bootstrap. To add MariaDB:
+
+<Steps>
+  <Step title="Open MariaDB Page">
+    In the Envloom application, navigate to the **MariaDB** page from the sidebar.
+  </Step>
+
+  <Step title="Install a Version">
+    Click **"Add version"** and select the MariaDB version you want to install.
+    
+    During installation, you'll be prompted to set a root password for the database.
+  </Step>
+
+  <Step title="Set Root Password">
+    Enter a secure root password when prompted. This password will be used for database access.
+  </Step>
+
+  <Step title="Wait for Installation">
+    Envloom will download and install MariaDB. Once complete, the service will start automatically.
+  </Step>
+
+  <Step title="Verify MariaDB">
+    Check the dashboard or MariaDB page to confirm the service is running.
+    
+    Test the connection with:
+    ```bash
+    mysql -u root -p
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Installation Issues
+
+**Issue**: SmartScreen blocks the installer  
+**Solution**: Click "More info" then "Run anyway". Envloom is safe but may not yet have enough downloads for automatic trust.
+
+**Issue**: UAC prompts keep appearing  
+**Solution**: UAC is required for system changes like PATH updates and hosts file modifications. Grant permission when requested.
+
+**Issue**: PHP doesn't download on first launch  
+**Solution**: Check your internet connection and firewall. Envloom needs to download from `windows.php.net`.
+
+### First Launch Issues
+
+**Issue**: Services won't start  
+**Solution**: Check if ports 80 (Nginx) or 9000+ (PHP-FPM) are already in use by other applications like IIS, Apache, or Skype.
+
+**Issue**: PATH commands not working  
+**Solution**: Close and reopen your terminal. PATH changes require a new shell session.
+
+**Issue**: NVM installation fails  
+**Solution**: The NVM setup requires administrator privileges. Run Envloom as administrator on first launch if the installation fails.
+
+### Getting Help
+
+If you encounter issues:
+
+1. Check the **Logs** page in Envloom for detailed error messages
+2. Review the runtime logs in the `logs/` directory within Envloom's data folder
+3. Open an issue on [GitHub](https://github.com/lepepe/envloom/issues) with:
+   - Your Windows version
+   - Error messages from logs
+   - Steps to reproduce the issue
+
+## Uninstallation
+
+To uninstall Envloom:
+
+1. Open **Settings** → **Apps** in Windows
+2. Find **Envloom** in the list
+3. Click **Uninstall**
+4. Follow the uninstallation wizard
+
+<Note>
+Uninstalling Envloom will not remove the runtimes or your project files. To fully clean up, manually delete the Envloom data directory (shown in Settings → config path).
+</Note>
+
+## Next Steps
+
+Now that Envloom is installed, you're ready to create your first site! Check out the [Quickstart](/quickstart) guide to get your first project running.

@@ -1,0 +1,472 @@
+---
+title: Site Management
+description: Link projects, configure domains, and manage SSL using the Envloom CLI
+---
+
+The Envloom CLI provides commands to link existing projects, manage local development sites, and configure SSL certificates - all from your terminal.
+
+## Overview
+
+Site management commands operate on the **current working directory**. When you run `loom link`, `loom unlink`, or `loom ssl`, the CLI uses your current directory to identify the project.
+
+<Note>
+Site management commands require that you navigate to your project directory before running them.
+</Note>
+
+## Linking Projects
+
+### loom link
+
+Link the current directory as an Envloom development site.
+
+**Syntax:**
+```bash
+loom link <php-line>
+```
+
+**Parameters:**
+
+<ParamField path="php-line" type="string" required>
+  The PHP version to use for this site (e.g., `8.5`, `8.4`)
+  
+  Must be an installed PHP version. Use `loom list php` to see available versions.
+</ParamField>
+
+**Example:**
+```bash
+cd ~/projects/my-laravel-app
+loom link 8.5
+```
+
+**Output:**
+```
+Linked my-laravel-app.test -> C:\Users\username\projects\my-laravel-app
+```
+
+### What Happens During Link
+
+When you link a project, Envloom:
+
+1. **Generates a domain** - Creates a `.test` domain based on the directory name
+   - Directory: `my-laravel-app` → Domain: `my-laravel-app.test`
+   - Special characters are converted to hyphens
+   - Multiple hyphens are collapsed to one
+
+2. **Creates site record** - Saves the site to `%LOCALAPPDATA%\Envloom\sites.json`
+   - Associates the path with the domain
+   - Records the selected PHP version
+   - Captures the current Node.js version
+   - Enables SSL by default
+
+3. **Configures Nginx** - Generates a site-specific Nginx configuration
+   - Creates `/sites/<domain>.conf`
+   - Configures FastCGI to use the correct PHP-FPM port
+   - Sets up SSL certificates (if enabled)
+   - Determines document root (detects `public/` for Laravel)
+
+4. **Updates hosts file** - Adds the domain to your Windows hosts file
+   - Requires admin elevation (UAC prompt)
+   - Adds entry: `127.0.0.1 my-laravel-app.test`
+   - Maintains a managed Envloom block
+
+5. **Reloads Nginx** - Applies the new configuration
+   - Runs `nginx -s reload` if Nginx is running
+
+6. **Refreshes PATH** - Updates system PATH with runtime binaries
+
+**Link Requirements:**
+
+<CodeGroup>
+```bash Success
+cd ~/projects/my-app
+loom link 8.5
+# ✓ Links successfully
+```
+
+```bash Error: PHP not installed
+cd ~/projects/my-app
+loom link 9.0
+# ✗ Error: php line 9.0 is not installed
+```
+
+```bash Error: Already linked
+cd ~/projects/my-app
+loom link 8.5  # First time: OK
+loom link 8.4  # Second time: Error
+# ✗ Error: this project is already linked as my-app.test
+```
+
+```bash Error: Domain conflict
+cd ~/projects/my-app
+loom link 8.5
+# If another project is already using 'my-app.test':
+# ✗ Error: site domain already exists: my-app.test
+```
+
+```bash Error: No Node version
+loom link 8.5
+# ✗ Error: no current Node version selected. Run `loom node <version>` first.
+```
+</CodeGroup>
+
+<Tip>
+Before linking, ensure you have:
+1. Installed the desired PHP version
+2. Set a current Node.js version (`loom node <version>`)
+</Tip>
+
+### Domain Name Rules
+
+Envloom automatically generates domains from directory names:
+
+| Directory Name | Generated Domain |
+|----------------|------------------|
+| `my-app` | `my-app.test` |
+| `My Laravel App` | `my-laravel-app.test` |
+| `project_2024` | `project-2024.test` |
+| `site!!!` | `site.test` |
+
+**Rules:**
+- Only alphanumeric characters and hyphens are allowed
+- Spaces and special characters become hyphens
+- Consecutive hyphens are collapsed to one
+- All domains end with `.test`
+
+<Note>
+Currently, you cannot customize the domain during linking. The domain is always derived from the directory name.
+</Note>
+
+## Unlinking Projects
+
+### loom unlink
+
+Remove the current directory from Envloom site management.
+
+**Syntax:**
+```bash
+loom unlink
+```
+
+**Example:**
+```bash
+cd ~/projects/my-laravel-app
+loom unlink
+```
+
+**Output:**
+```
+Unlinked my-laravel-app.test
+```
+
+### What Happens During Unlink
+
+1. **Removes site record** - Deletes the site from `sites.json`
+2. **Cleans Nginx config** - Removes `/sites/<domain>.conf`
+3. **Updates hosts file** - Removes the domain entry from Windows hosts
+4. **Reconciles orphans** - Cleans up any orphaned Nginx configs or logs
+5. **Reloads Nginx** - Applies the changes
+
+**Error Handling:**
+```bash
+cd ~/random-directory
+loom unlink
+```
+```
+Error: current directory is not linked in Envloom
+```
+
+<Warning>
+Unlinking does not delete your project files. It only removes the Envloom site configuration. Your code remains untouched.
+</Warning>
+
+## Managing SSL
+
+### loom ssl
+
+Enable or disable SSL for the current site.
+
+**Syntax:**
+```bash
+loom ssl <on|off>
+```
+
+**Parameters:**
+
+<ParamField path="mode" type="enum" required>
+  - `on` - Enable SSL (HTTPS)
+  - `off` - Disable SSL (HTTP only)
+</ParamField>
+
+**Examples:**
+
+**Enable SSL:**
+```bash
+cd ~/projects/my-laravel-app
+loom ssl on
+```
+
+**Output:**
+```
+Enabled SSL for my-laravel-app.test
+```
+
+**Disable SSL:**
+```bash
+loom ssl off
+```
+
+**Output:**
+```
+Disabled SSL for my-laravel-app.test
+```
+
+### What Happens During SSL Toggle
+
+1. **Updates site record** - Sets `ssl_enabled` flag in `sites.json`
+2. **Regenerates Nginx config** - Rewrites the site's Nginx configuration
+   - **SSL On:** Adds HTTPS server block, generates/uses certificate
+   - **SSL Off:** Removes HTTPS, keeps only HTTP block
+3. **Manages certificates** - Creates or references SSL certificates
+   - Uses local CA stored in `/sites/ca/`
+   - Generates site-specific cert in `/sites/certs/<domain>/`
+4. **Reloads Nginx** - Applies the new configuration
+
+**Error Handling:**
+```bash
+cd ~/random-directory
+loom ssl on
+```
+```
+Error: current directory is not linked in Envloom
+```
+
+<Note>
+SSL is enabled by default when you link a new site. You typically only need `loom ssl off` if you want HTTP-only access.
+</Note>
+
+### SSL Certificates
+
+Envloom uses a local Certificate Authority (CA) for SSL:
+
+```
+sites/
+├── ca/
+│   ├── ca.crt           # Local CA certificate
+│   └── ca.key           # Local CA private key
+└── certs/
+    └── my-app.test/
+        ├── cert.pem     # Site certificate
+        └── key.pem      # Site private key
+```
+
+**Trusting the CA:**  
+To avoid browser warnings, you can manually trust the CA certificate:
+
+1. Open `<envloom>/sites/ca/ca.crt`
+2. Install it to "Trusted Root Certification Authorities"
+3. Restart your browser
+
+<Tip>
+The desktop app provides a "Trust CA" button that automates this process.
+</Tip>
+
+## Practical Workflows
+
+### Link a New Laravel Project
+
+```bash
+# Navigate to the project
+cd ~/projects/my-new-app
+
+# Ensure Node is set
+loom node 23
+
+# Link with PHP 8.5
+loom link 8.5
+
+# Open in browser
+start https://my-new-app.test
+```
+
+### Switch PHP Version for a Site
+
+The CLI doesn't have a direct "change site PHP" command, but you can:
+
+1. Unlink the site
+2. Re-link with a different PHP version
+
+```bash
+cd ~/projects/my-app
+loom unlink
+loom link 8.4
+```
+
+<Note>
+Alternatively, use the desktop app to change the PHP version without unlinking/relinking. The GUI provides a site-specific PHP selector.
+</Note>
+
+### Disable SSL Temporarily
+
+```bash
+cd ~/projects/my-app
+
+# Disable SSL
+loom ssl off
+
+# Access via HTTP
+start http://my-app.test
+
+# Re-enable later
+loom ssl on
+```
+
+### Check Which Sites Are Linked
+
+The CLI doesn't have a `loom sites` command. To see all linked sites:
+
+1. Open the Envloom desktop app
+2. Navigate to the "Sites" page
+3. View all linked sites and their configurations
+
+Or inspect the sites file directly:
+```bash
+cat %LOCALAPPDATA%\Envloom\sites.json
+```
+
+## Site Configuration Details
+
+### Document Root Detection
+
+Envloom automatically detects the correct document root:
+
+| Framework | Document Root |
+|-----------|---------------|
+| Laravel | `/public` |
+| Symfony | `/public` |
+| WordPress | `/` (project root) |
+| Generic PHP | `/` (project root) |
+
+The detection logic checks for framework-specific files:
+- Laravel: `artisan` file present
+- Symfony: `bin/console` present
+- WordPress: `wp-config.php` present
+
+### FastCGI Port Mapping
+
+Each linked site uses the FastCGI port of its configured PHP version:
+
+```
+Site: my-app.test (PHP 8.5)
+→ Nginx proxies to 127.0.0.1:9085
+
+Site: old-project.test (PHP 8.4)
+→ Nginx proxies to 127.0.0.1:9084
+```
+
+**Port calculation:**
+```
+base_port + (major * 10) + minor
+9000 + (8 * 10) + 5 = 9085
+```
+
+### Site Files and Logs
+
+When you link a site, Envloom creates:
+
+```
+sites/
+├── <domain>.conf         # Nginx configuration
+└── certs/
+    └── <domain>/
+        ├── cert.pem
+        └── key.pem
+
+logs/nginx/
+├── <domain>.access.log   # Site access log
+└── <domain>.error.log    # Site error log
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: no current Node version selected">
+    You must have an active Node.js version before linking sites.
+    
+    **Solution:**
+    ```bash
+    loom node 23  # or any installed version
+    loom link 8.5
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: site domain already exists">
+    Another project is using the same domain.
+    
+    **Solution:**
+    1. Rename your project directory to something unique
+    2. Or unlink the conflicting site first
+    3. Then link your project
+  </Accordion>
+  
+  <Accordion title="UAC prompt appears during link/unlink">
+    Updating the Windows hosts file requires admin privileges.
+    
+    **Solution:**
+    - Click "Yes" on the UAC prompt
+    - This is expected behavior
+    - The prompt only appears when hosts need updating
+  </Accordion>
+  
+  <Accordion title="Site shows Nginx 404 after linking">
+    The site is linked but Nginx can't find the files.
+    
+    **Solution:**
+    1. Check that Nginx is running: use the desktop app
+    2. Verify the project path in `sites.json`
+    3. Ensure the document root exists (e.g., `/public` for Laravel)
+    4. Check Nginx error logs in the desktop app
+  </Accordion>
+  
+  <Accordion title="Browser shows SSL certificate warning">
+    The local CA certificate is not trusted by your browser.
+    
+    **Solution:**
+    1. Open the Envloom desktop app
+    2. Go to Settings or Sites page
+    3. Look for "Trust CA" or "Install CA" button
+    4. Click it to install the CA certificate
+    5. Restart your browser
+  </Accordion>
+</AccordionGroup>
+
+## Hosts File Management
+
+Envloom manages a dedicated block in your Windows hosts file:
+
+```
+# Envloom generated Hosts
+127.0.0.1 my-app.test
+127.0.0.1 another-site.test
+# /Envloom generated Hosts
+```
+
+**Features:**
+- Only Envloom-managed domains are modified
+- Existing entries (like Herd) are preserved
+- Orphaned entries are reconciled during sync
+- Admin elevation is requested when needed
+
+<Warning>
+Do not manually edit the Envloom hosts block. Changes will be overwritten on the next link/unlink operation.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Runtime Management" icon="server" href="/cli/runtime-management">
+    Learn how to switch PHP, Node, and MySQL versions
+  </Card>
+  <Card title="CLI Overview" icon="terminal" href="/cli/overview">
+    Back to CLI overview and basic usage
+  </Card>
+</CardGroup>

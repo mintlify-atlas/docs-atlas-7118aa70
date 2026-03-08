@@ -1,80 +1,366 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get your first site running with Envloom in minutes
 ---
 
-## Get started in three steps
+# Quickstart Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through creating your first local site with Envloom. We'll create a new Laravel application and have it running at a local `.test` domain with SSL in just a few minutes.
 
-### Step 1: Set up your local environment
+<Note>
+Before starting, make sure you've [installed Envloom](/installation) and completed the first-launch bootstrap process.
+</Note>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+## Creating Your First Laravel Site
+
+Let's create a new Laravel site with Envloom's site wizard.
+
+<Steps>
+  <Step title="Open the Sites Page">
+    In the Envloom application, click on **Sites** in the left sidebar to open the sites management page.
+  </Step>
+
+  <Step title="Launch the Site Wizard">
+    Click the **"Create Site"** or **"Add Site"** button to open the site creation wizard.
+  </Step>
+
+  <Step title="Choose Site Type">
+    In the wizard, select **"Create new Laravel site"**.
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    Envloom will provision a complete Laravel application for you with all dependencies installed.
+  </Step>
+
+  <Step title="Configure Site Details">
+    Fill in the site configuration:
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    - **Site Name**: Enter a name for your site (e.g., `my-app`)
+    - **Domain**: This will auto-generate as `my-app.test`
+    - **Path**: Choose where to create the project (e.g., `C:\Users\YourName\Projects\my-app`)
+    - **PHP Version**: Select the PHP version to use (default is the current version)
+    - **Starter Kit**: Optionally choose a Laravel starter kit:
+      - None (plain Laravel)
+      - React
+      - Vue
+      - Svelte
+      - Livewire
+  </Step>
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+  <Step title="Start Provisioning">
+    Click **"Create Site"** to begin the provisioning process.
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    Envloom will:
+    1. Download the Laravel starter kit or create a new Laravel project via Composer
+    2. Create a `.env` file from `.env.example`
+    3. Run `composer install` to install PHP dependencies
+    4. Generate an application key with `php artisan key:generate`
+    5. Run initial migrations to set up the database
+    6. Install Laravel Boost for optimization
+    7. Run `npm install` to install frontend dependencies
+    8. Run `npm run build` to compile assets
+    9. Run final migrations
+    
+    <Note>
+    The provisioning process may take 3-5 minutes depending on your internet speed and computer performance. Watch the progress in the wizard output panel.
+    </Note>
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Wait for Configuration">
+    After provisioning completes, Envloom will:
+    
+    - Generate an Nginx configuration file for your site
+    - Update your hosts file to point `my-app.test` to `127.0.0.1`
+    - Reload Nginx to apply the new configuration
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Access Your Site">
+    Once complete, open your browser and visit:
+    
+    ```
+    http://my-app.test
+    ```
+    
+    You should see the Laravel welcome page!
+  </Step>
+</Steps>
 
-### Step 3: Go live
+## Enabling SSL
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+Let's add HTTPS support to your new site.
 
-## Next steps
+<Steps>
+  <Step title="Navigate to Site Details">
+    In the Envloom Sites page, find your newly created site in the list and click on it to view details.
+  </Step>
 
-Now that you have your docs running, explore these key features:
+  <Step title="Toggle SSL">
+    Find the **SSL** toggle switch and turn it **ON**.
+    
+    Envloom will:
+    - Generate a local certificate authority (if it doesn't exist)
+    - Create a SSL certificate for your domain
+    - Update the Nginx configuration to serve HTTPS
+    - Reload Nginx
+  </Step>
+
+  <Step title="Access via HTTPS">
+    Open your browser and visit:
+    
+    ```
+    https://my-app.test
+    ```
+    
+    Your browser will show a certificate warning because it's a self-signed certificate.
+  </Step>
+
+  <Step title="Trust the Certificate (Optional)">
+    To remove the browser warning:
+    
+    1. In your browser, view the certificate details
+    2. Export the Envloom CA certificate
+    3. Import it into your Windows Trusted Root Certificate Authorities
+    
+    Or simply click "Advanced" → "Proceed" to bypass the warning during development.
+    
+    <Warning>
+    The SSL certificate is for local development only. Never use these certificates for production websites.
+    </Warning>
+  </Step>
+</Steps>
+
+## Linking an Existing Project
+
+Already have a Laravel project? You can link it to Envloom instead of creating a new one.
+
+### Using the Desktop App
+
+<Steps>
+  <Step title="Open Sites Page">
+    Navigate to **Sites** in the Envloom sidebar.
+  </Step>
+
+  <Step title="Choose Link Existing">
+    Click **"Add Site"** and select **"Link existing project"**.
+  </Step>
+
+  <Step title="Configure the Site">
+    Fill in:
+    
+    - **Site Name**: A friendly name for your site
+    - **Domain**: The local domain (e.g., `existing-app.test`)
+    - **Path**: Browse to your existing project directory
+    - **PHP Version**: Select the PHP version required by your project
+  </Step>
+
+  <Step title="Complete Linking">
+    Click **"Link Site"**. Envloom will:
+    
+    - Detect the project framework (Laravel, Symfony, WordPress, etc.)
+    - Create an Nginx configuration
+    - Add the domain to your hosts file
+    - Reload Nginx
+  </Step>
+
+  <Step title="Access Your Site">
+    Visit your site at `http://existing-app.test`.
+  </Step>
+</Steps>
+
+### Using the CLI
+
+Navigate to your project directory in a terminal and run:
+
+```bash
+cd C:\path\to\your\project
+loom link
+```
+
+The CLI will:
+1. Detect your project framework
+2. Prompt for a domain name (defaults to folder name + `.test`)
+3. Create the site configuration
+4. Update hosts and reload Nginx
+
+Example output:
+
+```
+Linking site in C:\Users\YourName\Projects\my-laravel-app
+Framework detected: laravel
+Enter domain name [my-laravel-app.test]: 
+Site linked successfully!
+Access your site at: http://my-laravel-app.test
+```
+
+## Switching PHP Versions
+
+Different projects may require different PHP versions. Here's how to switch:
+
+### For a Specific Site
+
+<Steps>
+  <Step title="Open Site Details">
+    In the Sites page, click on the site you want to modify.
+  </Step>
+
+  <Step title="Change PHP Version">
+    Find the **PHP Version** dropdown and select a different version (e.g., PHP 8.2, PHP 8.1, PHP 7.4).
+    
+    <Note>
+    If the version you need isn't available, go to the PHP page first and install it using "Add version".
+    </Note>
+  </Step>
+
+  <Step title="Apply Changes">
+    Envloom will automatically:
+    - Update the Nginx configuration for this site
+    - Reload Nginx
+    
+    Your site now uses the selected PHP version!
+  </Step>
+</Steps>
+
+### Globally (All New Sites)
+
+To change the default PHP version:
+
+1. Go to the **PHP** page in Envloom
+2. Find the version you want to use
+3. Click **"Set as Current"**
+4. The global PHP version is now changed
+
+You can verify with:
+
+```bash
+php -v
+```
+
+Or using the CLI:
+
+```bash
+loom current
+```
+
+## Working with the CLI
+
+The `loom` CLI provides quick access to Envloom features from the command line.
+
+### Useful Commands
+
+```bash
+# Show current runtime versions
+loom current
+
+# List available PHP versions
+loom list php
+
+# List available Node.js versions
+loom list node
+
+# Link current directory as a site
+loom link
+
+# Unlink the site in current directory
+loom unlink
+
+# Enable SSL for current directory site
+loom ssl on
+
+# Disable SSL for current directory site
+loom ssl off
+
+# Switch global PHP version
+loom php 8.2
+
+# Switch global Node.js version
+loom node 20
+```
+
+### CLI Workflow Example
+
+Here's a typical workflow using the CLI:
+
+```bash
+# Navigate to your projects directory
+cd C:\Users\YourName\Projects
+
+# Create a new Laravel project manually
+composer create-project laravel/laravel my-new-app
+cd my-new-app
+
+# Link it to Envloom
+loom link
+
+# Enable SSL
+loom ssl on
+
+# Open in browser
+start https://my-new-app.test
+```
+
+## Managing Services
+
+### Start and Stop Services
+
+You can control services from:
+
+**Desktop App:**
+- Use the **Start all** / **Stop all** buttons on the Dashboard
+- Individual service controls on each runtime page
+
+**System Tray:**
+- Right-click the Envloom tray icon
+- Select **Start all** or **Stop all**
+
+**Service Auto-Start:**
+- Go to **Settings**
+- Enable **Auto-start services** to automatically start PHP-FPM, Nginx, and MariaDB when Envloom launches
+
+### Viewing Logs
+
+If something isn't working, check the logs:
+
+<Steps>
+  <Step title="Open Logs Page">
+    Click on **Logs** in the Envloom sidebar.
+  </Step>
+
+  <Step title="Select Log Source">
+    Choose the log type to view:
+    
+    - **Runtime**: Envloom internal operations
+    - **PHP**: PHP errors by version
+    - **Nginx**: Nginx access and error logs (global and per-site)
+    - **MariaDB**: Database errors and queries
+  </Step>
+
+  <Step title="Review Errors">
+    Use the log viewer to identify issues. Common problems include:
+    
+    - Port conflicts (another service using port 80 or 3306)
+    - PHP syntax errors in your application
+    - Missing PHP extensions
+    - Database connection failures
+  </Step>
+</Steps>
+
+## Next Steps
+
+Now that you have your first site running, explore more Envloom features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Runtime Management" icon="server" href="/runtimes/php">
+    Install multiple PHP, Node.js, MariaDB versions and switch between them
+  </Card>
+  <Card title="Sites Configuration" icon="globe" href="/features/sites">
+    Learn advanced site configuration options and per-site settings
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Master the Envloom CLI for faster development workflows
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting/common-issues">
+    Solutions to common issues and error messages
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+**Pro Tip**: Pin commonly used sites to your browser bookmarks, and use the system tray menu to quickly open them. Right-click the Envloom icon → Sites → Your Site Name.
 </Note>

@@ -1,0 +1,391 @@
+---
+title: Runtime Management
+description: Manage PHP, Node.js, MariaDB, and Nginx versions using the Envloom CLI
+---
+
+The Envloom CLI provides commands to view and switch between installed runtime versions. All runtime changes are applied globally and affect both the CLI and desktop application.
+
+## Viewing Current Versions
+
+### loom current
+
+Display the currently active version for all runtimes.
+
+**Syntax:**
+```bash
+loom current
+```
+
+**Example:**
+```bash
+loom current
+```
+
+**Output:**
+```
+php=8.5
+node=23.5.0
+mysql=11.7
+nginx=1.27.3
+```
+
+**Output Format:**
+- `php=<version>` - Current PHP line (e.g., `8.5`, `8.4`)
+- `node=<version>` - Current Node.js version (e.g., `23.5.0`, `20.18.1`)
+- `mysql=<version>` - Current MariaDB line (e.g., `11.7`, `10.11`)
+- `nginx=<version>` - Current Nginx version (e.g., `1.27.3`)
+
+<Note>
+If a runtime is not installed or no version is selected, it will display `-` instead of a version number.
+</Note>
+
+## Listing Installed Versions
+
+### loom list
+
+List all installed versions for a specific runtime.
+
+**Syntax:**
+```bash
+loom list <runtime>
+```
+
+**Available runtimes:**
+- `php` - PHP versions
+- `node` - Node.js versions
+- `mysql` or `mariadb` - MariaDB versions
+- `nginx` - Nginx versions
+
+### List PHP Versions
+
+```bash
+loom list php
+```
+
+**Example Output:**
+```
+8.4
+8.5
+```
+
+<Accordion title="How PHP versions are organized">
+  Envloom uses PHP "lines" (major.minor) rather than full versions. Each line may contain multiple patch versions, but only the latest is kept.
+  
+  For example:
+  - Line `8.5` might contain PHP 8.5.2
+  - Line `8.4` might contain PHP 8.4.5
+  
+  When switching versions, you specify the line (e.g., `8.5`), not the full version.
+</Accordion>
+
+### List Node.js Versions
+
+```bash
+loom list node
+```
+
+**Example Output:**
+```
+20.18.1
+22.12.0
+23.5.0
+```
+
+<Note>
+Node.js versions are managed through NVM (Node Version Manager) which must be installed. If NVM is not available, you'll see an error: "Node runtime manager is not available".
+</Note>
+
+### List MariaDB Versions
+
+```bash
+loom list mysql
+# or
+loom list mariadb
+```
+
+**Example Output:**
+```
+10.11
+11.7
+```
+
+### List Nginx Versions
+
+```bash
+loom list nginx
+```
+
+**Example Output:**
+```
+1.27.3
+```
+
+## Switching Runtime Versions
+
+### loom php
+
+Switch the globally active PHP version.
+
+**Syntax:**
+```bash
+loom php <line>
+```
+
+**Parameters:**
+
+<ParamField path="line" type="string" required>
+  The PHP line to activate (e.g., `8.5`, `8.4`, `8.3`)
+  
+  Must be an installed version. Use `loom list php` to see available versions.
+</ParamField>
+
+**Example:**
+```bash
+loom php 8.4
+```
+
+**Output:**
+```
+PHP current set to 8.4
+```
+
+**What happens:**
+1. Updates the `bin/php/current` junction to point to the selected version
+2. Updates the PHP configuration state (`bin/php/_state.json`)
+3. Refreshes system PATH to include the new PHP version
+4. The change is immediately reflected in the desktop app
+
+**Error Examples:**
+```bash
+loom php 9.0
+```
+```
+Error: php line 9.0 is not installed
+```
+
+<Tip>
+After switching PHP versions, any new terminal sessions will use the new version. Existing sessions may need to be restarted.
+</Tip>
+
+### loom node
+
+Switch the globally active Node.js version.
+
+**Syntax:**
+```bash
+loom node <version|major>
+```
+
+**Parameters:**
+
+<ParamField path="version" type="string" required>
+  Full version number (e.g., `23.5.0`) or major version (e.g., `23`, `22`)
+  
+  If you specify a major version, Envloom will use the latest installed version matching that major.
+</ParamField>
+
+**Examples:**
+
+**Switch to specific version:**
+```bash
+loom node 23.5.0
+```
+
+**Output:**
+```
+Node current set to 23.5.0
+```
+
+**Switch using major version:**
+```bash
+loom node 22
+```
+
+**Output:**
+```
+Node current set to 22.12.0
+```
+
+**What happens:**
+1. Runs `nvm use <version>` to activate the version
+2. Updates the `bin/node/current` symlink
+3. Refreshes system PATH
+4. The change is reflected in both CLI and desktop app
+
+**Error Examples:**
+```bash
+loom node 18.0.0
+```
+```
+Error: no installed Node version matches '18.0.0'
+```
+
+```bash
+loom node
+```
+```
+Error: usage: loom node <version|major>
+```
+
+<Note>
+Node.js version switching requires NVM (Node Version Manager). Envloom installs NVM automatically during initial setup.
+</Note>
+
+## How Versions Work
+
+### PHP Version Structure
+
+Envloom organizes PHP installations by "line" (major.minor):
+
+```
+bin/php/
+├── 8.4/          # PHP 8.4.x line
+│   ├── php.exe
+│   ├── php.ini
+│   └── ...
+├── 8.5/          # PHP 8.5.x line
+│   ├── php.exe
+│   ├── php.ini
+│   └── ...
+└── current/      # Junction → active version
+```
+
+**Port Mapping:**  
+Each PHP line is assigned a unique FastCGI port based on the version:
+- Base port: `9000` (configurable)
+- Line `8.4` → port `9084`
+- Line `8.5` → port `9085`
+
+### Node.js Version Management
+
+Node.js uses NVM for version management:
+
+```
+bin/nvm/
+└── nvm.exe       # NVM executable
+bin/node/
+├── 20.18.1/      # Node 20.x
+├── 23.5.0/       # Node 23.x
+└── current/      # Symlink → active version
+```
+
+### MariaDB Version Structure
+
+```
+bin/mariadb/
+├── 10.11/        # MariaDB 10.11.x
+├── 11.7/         # MariaDB 11.7.x
+└── current/      # Junction → active version
+```
+
+## Shims and PATH
+
+Envloom creates command shims in the `bin` directory:
+
+**PHP Shims:**
+- `php.cmd` → `bin/php/current/php.exe`
+- `php84.cmd` → `bin/php/8.4/php.exe`
+- `php85.cmd` → `bin/php/8.5/php.exe`
+
+**Database Shims:**
+- `mysql.cmd` → `bin/mariadb/current/bin/mysql.exe`
+- `mariadb.cmd` → `bin/mariadb/current/bin/mariadb.exe`
+- `mysqladmin.cmd` → `bin/mariadb/current/bin/mysqladmin.exe`
+
+**Other Shims:**
+- `composer.cmd` → runs `php composer.phar`
+- `nginx.cmd` → `bin/nginx/current/nginx.exe`
+- `loom.cmd` → calls Envloom with `--cli` flag
+
+<Note>
+Envloom manages PATH automatically. You only need one PATH entry pointing to the `bin` directory.
+</Note>
+
+## Installing New Versions
+
+The CLI does not support installing new runtime versions. Use the desktop application to:
+
+1. Open Envloom
+2. Navigate to the runtime page (PHP, Node, or MariaDB)
+3. Click "Add Version" or "Install"
+4. Select and install the desired version
+
+Once installed via the GUI, the version becomes available in the CLI.
+
+## Practical Workflows
+
+### Check and Switch PHP Version
+
+```bash
+# Check current PHP
+loom current | grep php
+
+# List available PHP versions
+loom list php
+
+# Switch to PHP 8.5
+loom php 8.5
+
+# Verify the change
+php -v
+```
+
+### Switch Node for a Project
+
+```bash
+cd ~/projects/my-node-app
+
+# Check what's currently active
+loom current | grep node
+
+# Switch to Node 20
+loom node 20
+
+# Verify
+node --version
+```
+
+### Quick Runtime Status
+
+```bash
+loom current
+```
+
+Use this command in scripts or shell prompts to display active runtime versions.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: php line X.Y is not installed">
+    The specified PHP version is not installed.
+    
+    **Solution:**
+    1. Run `loom list php` to see available versions
+    2. Install the version via the desktop app if needed
+    3. Try again with an installed version
+  </Accordion>
+  
+  <Accordion title="Error: Node runtime manager is not available">
+    NVM is not installed or not properly configured.
+    
+    **Solution:**
+    1. Open the Envloom desktop app
+    2. Navigate to the Node page
+    3. The app will install NVM automatically
+    4. Restart your terminal and try again
+  </Accordion>
+  
+  <Accordion title="Changes not reflected in terminal">
+    Your current terminal session may have cached the old PATH.
+    
+    **Solution:**
+    1. Close and reopen your terminal
+    2. Or run: `refreshenv` (if using chocolatey) or restart the shell
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Card title="Site Management" icon="globe" href="/cli/site-management">
+  Learn how to link projects and manage local development sites using the CLI
+</Card>

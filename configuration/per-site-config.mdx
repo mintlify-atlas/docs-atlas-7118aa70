@@ -1,0 +1,270 @@
+---
+title: "Per-Site Configuration"
+description: "Override PHP versions, Node versions, and runtime settings for individual sites using .envloom.json"
+icon: "file-code"
+---
+
+## Overview
+
+Envloom supports per-site configuration overrides through a `.envloom.json` file placed in your project's root directory. This allows different sites to use different PHP versions, Node versions, or custom settings without affecting the global defaults.
+
+<Warning>
+  **This feature is currently in development.** While the infrastructure exists in the codebase, per-site configuration files are not yet fully implemented in the current version of Envloom.
+</Warning>
+
+## Current Per-Site Configuration
+
+While `.envloom.json` is not yet supported, you can configure per-site settings through the **Sites** UI:
+
+### PHP Version Override
+
+Each site can use a different PHP version:
+
+1. Open Envloom and navigate to **Sites**
+2. Select your site from the list
+3. Use the **PHP Version** dropdown to select a different version
+4. Click **Apply** to regenerate the nginx configuration
+
+<Tip>
+  When you change a site's PHP version, Envloom automatically updates the nginx configuration to point to the correct PHP-FPM port for that version.
+</Tip>
+
+### Site Record Storage
+
+Site configurations are currently stored in `sites.json` within the Envloom data directory:
+
+```json sites.json
+{
+  "sites": [
+    {
+      "id": "abc-123",
+      "name": "My Laravel App",
+      "domain": "example.test",
+      "linked": true,
+      "sslEnabled": true,
+      "path": "C:/Projects/example",
+      "phpVersion": "8.3",
+      "nodeVersion": "20",
+      "starterKit": null
+    }
+  ]
+}
+```
+
+## Planned .envloom.json Support
+
+In future versions, Envloom will support per-project configuration files with the following structure:
+
+### File Location
+
+Place `.envloom.json` in your project root:
+
+```plaintext
+C:/Projects/example/
+├── .envloom.json        # Per-site Envloom config
+├── .env                 # Laravel environment
+├── .gitignore
+├── artisan
+├── composer.json
+└── ...
+```
+
+### Proposed Configuration Schema
+
+```json .envloom.json (Planned)
+{
+  "php": {
+    "version": "8.3",
+    "port": 9083,
+    "memoryLimit": "512M",
+    "uploadMaxSize": "128M",
+    "extensions": ["redis", "imagick"]
+  },
+  "node": {
+    "version": "20"
+  },
+  "mariadb": {
+    "version": "11.4",
+    "database": "example_db"
+  },
+  "domain": "example.test",
+  "ssl": true,
+  "root": "public"
+}
+```
+
+### Configuration Inheritance
+
+The planned behavior will follow this hierarchy:
+
+1. **Global Defaults**: Settings from `~/.envloom/config.json` and UI configuration
+2. **Runtime Defaults**: Version-specific defaults from `config/php/`, `config/mariadb/`, etc.
+3. **Per-Site Overrides**: Values from `.envloom.json` take precedence
+
+<Note>
+  Per-site configuration will inherit from global settings by default, only overriding explicitly specified values.
+</Note>
+
+## Current Workarounds
+
+### PHP Version Per Site
+
+Use the UI to assign different PHP versions:
+
+```bash
+# List sites and their PHP versions
+loom sites
+```
+
+**Output:**
+```plaintext
+example.test     → PHP 8.3  (C:/Projects/example)
+another.test     → PHP 8.1  (C:/Projects/another)
+```
+
+Change via UI:
+- Navigate to **Sites** > **example.test**
+- Select **PHP 8.2** from the dropdown
+- Click **Apply**
+
+### Node Version Per Site
+
+While per-site Node versions aren't enforced by Envloom, you can use `nvm` directly in your project:
+
+```bash
+# In your project directory
+cd C:/Projects/example
+
+# Create .nvmrc
+echo 20 > .nvmrc
+
+# Use the specified version
+nvm use
+```
+
+### Custom php.ini Settings
+
+For project-specific PHP settings, create a custom `.user.ini` in your project's public directory:
+
+```ini public/.user.ini
+memory_limit = 1G
+upload_max_filesize = 256M
+post_max_size = 256M
+```
+
+PHP will read this file and apply the settings for requests to this directory.
+
+### Environment-Specific .env
+
+For Laravel projects, use `.env` for database and application configuration:
+
+```env .env
+APP_URL=https://example.test
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=example_db
+```
+
+Envloom automatically updates `APP_URL` when you provision a new site.
+
+## Implementation Status
+
+According to `FEATURES.md`, per-site configuration is tracked as:
+
+```markdown
+### 3) Config por proyecto
+- [x] Registro manual de sitios desde UI (persistido en backend `sites.json`).
+- [x] Provisionado real de sitios nuevos (Laravel + starter kit + Composer/NPM/migrations).
+- [ ] Archivo `.envloom.json` por proyecto.
+- [ ] Overrides por proyecto (PHP, Node, MariaDB, dominio, puertos, root/public).
+- [ ] Herencia de defaults globales.
+```
+
+<Note>
+  The core infrastructure for per-site overrides exists in the `SiteRecord` model, but `.envloom.json` file support is not yet implemented.
+</Note>
+
+## Viewing Current Site Configuration
+
+You can inspect a site's current configuration through:
+
+### Desktop UI
+
+1. Navigate to **Sites**
+2. Click on the site name
+3. View the configuration panel showing:
+   - Domain
+   - Path
+   - PHP version
+   - SSL status
+   - Link status
+
+### CLI (Planned)
+
+Future CLI support will include:
+
+```bash
+# Show site configuration
+loom site:config example.test
+
+# Set PHP version
+loom site:php example.test 8.3
+
+# Enable SSL
+loom ssl on example.test
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Version Pinning" icon="thumbtack">
+    Always specify exact major versions for PHP (e.g., `8.3` instead of `latest`) to ensure consistency across team members and environments.
+  </Accordion>
+
+  <Accordion title="SSL by Default" icon="lock">
+    Enable SSL for all local sites to match production environments and avoid mixed-content warnings during development.
+  </Accordion>
+
+  <Accordion title="Document Custom Settings" icon="file-lines">
+    If you modify nginx configs or use custom `.user.ini` files, document these in your project's README so team members can replicate the setup.
+  </Accordion>
+
+  <Accordion title="Avoid Hardcoded Ports" icon="ban">
+    Let Envloom manage PHP-FPM ports automatically. The port calculation is based on the PHP version: `base_port + (major * 10) + minor`.
+    
+    Example:
+    - PHP 8.3 → Port 9083 (9000 + 83)
+    - PHP 8.1 → Port 9081 (9000 + 81)
+  </Accordion>
+</AccordionGroup>
+
+## Migration Path
+
+When `.envloom.json` support is added, existing site configurations will be automatically migrated:
+
+1. Envloom will read your current `sites.json` configuration
+2. Generate `.envloom.json` files in each project directory
+3. Preserve all existing settings (PHP version, SSL status, domain, etc.)
+4. Maintain backward compatibility with `sites.json` during the transition
+
+<Tip>
+  To prepare for `.envloom.json` support, keep your project-specific settings documented in your README or a local notes file.
+</Tip>
+
+## Related Configuration
+
+<CardGroup cols={2}>
+  <Card title="Global Settings" icon="gear" href="/configuration/settings">
+    Configure application-wide defaults and behavior
+  </Card>
+  <Card title="File Paths" icon="folder-tree" href="/configuration/paths">
+    Understand where configurations, logs, and binaries are stored
+  </Card>
+  <Card title="Site Management" icon="globe" href="/features/sites">
+    Learn how to create, link, and manage sites
+  </Card>
+  <Card title="PHP Runtime" icon="php" href="/runtimes/php">
+    Configure PHP versions, extensions, and settings
+  </Card>
+</CardGroup>

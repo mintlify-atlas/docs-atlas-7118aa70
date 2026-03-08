@@ -1,0 +1,488 @@
+---
+title: "Site Management"
+description: "Create, link, and configure local development sites with automatic provisioning, SSL, and per-site runtime versions"
+---
+
+## Overview
+
+Envloom's site management system allows you to create new projects or link existing ones with automatic Nginx configuration, local SSL certificates, and per-site PHP version selection.
+
+<CardGroup cols={2}>
+  <Card title="Create New Sites" icon="plus">
+    Provision fresh Laravel projects with starter kits
+  </Card>
+  <Card title="Link Existing Sites" icon="link">
+    Connect existing projects with auto-detection
+  </Card>
+</CardGroup>
+
+## Site Creation Workflow
+
+### Creating a New Laravel Site
+
+<Steps>
+  <Step title="Open Site Wizard">
+    Navigate to **Sites** and click **Create New Site**
+  </Step>
+  
+  <Step title="Configure Site Details">
+    - **Site Name**: Display name for the project
+    - **Domain**: Local domain (e.g., `myapp.test`)
+    - **Path**: Directory where project will be created
+    - **PHP Version**: Select from installed PHP versions (e.g., `8.3`)
+    - **Starter Kit**: Choose from React, Vue, Svelte, Livewire, or none
+  </Step>
+  
+  <Step title="Enable SSL (Optional)">
+    Toggle **Enable SSL** to generate local certificates
+  </Step>
+  
+  <Step title="Start Provisioning">
+    Click **Create** to begin automated setup
+  </Step>
+</Steps>
+
+### Automated Provisioning Process
+
+When you create a new site, Envloom executes the following steps automatically:
+
+<Tabs>
+  <Tab title="With Starter Kit">
+    ```bash Provisioning with starter kit
+    # 1. Download latest release from GitHub
+    # e.g., laravel/react-starter-kit latest zipball
+    
+    # 2. Extract to project directory
+    # Handles both flat and nested archive structures
+    
+    # 3. Create .env from .env.example
+    # Auto-updates APP_URL to match domain
+    
+    # 4. Create database.sqlite if needed
+    
+    # 5. Install Composer dependencies
+    php composer.phar install --no-interaction
+    
+    # 6. Generate application key
+    php artisan key:generate --force
+    
+    # 7. Run initial migrations
+    php artisan migrate --force
+    
+    # 8. Install Laravel Boost
+    php composer.phar require laravel/boost
+    php artisan boost:install
+    
+    # 9. Install and build frontend assets
+    npm install
+    npm run build
+    
+    # 10. Final migration run
+    php artisan migrate --force
+    ```
+  </Tab>
+  
+  <Tab title="Plain Laravel">
+    ```bash Provisioning plain Laravel
+    # 1. Create project via Composer
+    php composer.phar create-project laravel/laravel /path/to/site
+    
+    # 2. Create .env from .env.example
+    
+    # 3. Install dependencies
+    php composer.phar install
+    
+    # 4. Generate app key
+    php artisan key:generate --force
+    
+    # 5. Run migrations
+    php artisan migrate --force
+    
+    # 6. Install Boost
+    php composer.phar require laravel/boost
+    php artisan boost:install
+    
+    # 7. Build assets
+    npm install
+    npm run build
+    
+    # 8. Final migrations
+    php artisan migrate --force
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The wizard displays real-time output from each provisioning step. The output auto-scrolls and avoids duplicates.
+</Note>
+
+### Available Starter Kits
+
+Envloom downloads starter kits from official Laravel repositories:
+
+| Starter Kit | Repository | Description |
+|------------|------------|-------------|
+| **React** | `laravel/react-starter-kit` | Laravel + React + Inertia.js |
+| **Vue** | `laravel/vue-starter-kit` | Laravel + Vue 3 + Inertia.js |
+| **Svelte** | `laravel/svelte-starter-kit` | Laravel + Svelte + Inertia.js |
+| **Livewire** | `laravel/livewire-starter-kit` | Laravel + Livewire + Alpine.js |
+
+<Warning>
+  Starter kits are downloaded as GitHub release zipballs, **not** via `git clone`. No git history is included.
+</Warning>
+
+## Linking Existing Sites
+
+### Link Workflow
+
+<Steps>
+  <Step title="Select 'Link Existing'">
+    In the site creation wizard, choose **Link Existing Project**
+  </Step>
+  
+  <Step title="Browse to Project">
+    Select the root directory of your existing project
+  </Step>
+  
+  <Step title="Auto-Detection">
+    Envloom inspects the project and detects:
+    - Framework (Laravel, Symfony, WordPress, generic PHP)
+    - Suggested site name (from directory name)
+    - Whether it contains PHP files
+  </Step>
+  
+  <Step title="Configure Domain & PHP">
+    - Set local domain (e.g., `existing-app.test`)
+    - Choose PHP version for this site
+    - Enable SSL if needed
+  </Step>
+  
+  <Step title="Register Site">
+    Envloom creates Nginx config and updates hosts file **without** running provisioning steps
+  </Step>
+</Steps>
+
+### Framework Detection Logic
+
+Envloom detects frameworks in this order:
+
+```javascript Detection hierarchy (src-tauri/src/lib.rs:752-796)
+1. Laravel → if artisan file exists
+2. Symfony → if bin/console exists
+3. WordPress → if wp-config.php or wp-includes/ exists
+4. Composer project → if composer.json exists
+   - Check require: laravel/framework → Laravel
+   - Check require: symfony/* → Symfony
+   - Else → generic PHP Composer project
+5. PHP Simple → if index.php or any .php files exist
+6. Unknown → no PHP files detected
+```
+
+<Note>
+  Linked sites **preserve** existing `.env` configuration. Envloom does not overwrite `APP_URL` for linked projects.
+</Note>
+
+## Site Configuration
+
+### Per-Site Settings
+
+Each site is stored in `sites.json` with the following structure:
+
+```json Site record structure
+{
+  "id": "uuid-here",
+  "name": "My Laravel App",
+  "domain": "myapp.test",
+  "linked": false,
+  "sslEnabled": true,
+  "path": "C:/Users/dev/projects/myapp",
+  "phpVersion": "8.3",
+  "nodeVersion": "22",
+  "starterKit": "react"
+}
+```
+
+### Changing PHP Version
+
+You can switch PHP versions for any site from the UI:
+
+<Steps>
+  <Step title="Open Site Details">
+    Click on a site in the **Sites** list
+  </Step>
+  
+  <Step title="Select New PHP Version">
+    Use the PHP version dropdown to choose a different installed version
+  </Step>
+  
+  <Step title="Auto-Regeneration">
+    Envloom:
+    1. Updates the site record in `sites.json`
+    2. Regenerates Nginx config with new PHP-FPM port
+    3. Reloads Nginx to apply changes
+  </Step>
+</Steps>
+
+<Warning>
+  The selected PHP version must already be installed. If not, install it from **Runtime > PHP** first.
+</Warning>
+
+## Nginx Configuration
+
+### Auto-Generated Site Config
+
+Each site gets a dedicated Nginx config file at `sites/{domain}.conf`:
+
+<Tabs>
+  <Tab title="Without SSL">
+    ```nginx HTTP only configuration
+    server {
+        listen 80;
+        server_name myapp.test;
+        access_log logs/nginx/sites/myapp.test.access.log;
+        error_log logs/nginx/sites/myapp.test.error.log;
+        
+        root C:/Users/dev/projects/myapp/public;
+        index index.php index.html index.htm;
+        
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+        
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_pass 127.0.0.1:9083;
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="With SSL">
+    ```nginx HTTPS with redirect
+    server {
+        listen 80;
+        server_name myapp.test;
+        access_log logs/nginx/sites/myapp.test.access.log;
+        error_log logs/nginx/sites/myapp.test.error.log;
+        return 301 https://$host$request_uri;
+    }
+    
+    server {
+        listen 443 ssl;
+        server_name myapp.test;
+        access_log logs/nginx/sites/myapp.test.access.log;
+        error_log logs/nginx/sites/myapp.test.error.log;
+        ssl_certificate sites/certs/myapp.test.crt;
+        ssl_certificate_key sites/certs/myapp.test.key;
+        
+        root C:/Users/dev/projects/myapp/public;
+        index index.php index.html index.htm;
+        
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+        
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_pass 127.0.0.1:9083;
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Document Root Detection
+
+Envloom automatically detects the correct document root:
+
+```javascript Root detection logic
+if (site_path + "/public" exists) {
+    root = site_path + "/public"  // Laravel, Symfony style
+} else {
+    root = site_path                // WordPress, flat structure
+}
+```
+
+### Per-Site Logs
+
+Each site gets dedicated Nginx logs:
+
+- **Access log**: `logs/nginx/sites/{domain}.access.log`
+- **Error log**: `logs/nginx/sites/{domain}.error.log`
+
+<Note>
+  View site-specific logs from **Logs > Nginx** and select your site from the dropdown.
+</Note>
+
+## Hosts File Management
+
+### Automatic Hosts Updates
+
+Envloom manages entries in `C:\Windows\System32\drivers\etc\hosts`:
+
+```hosts Managed hosts block
+# Envloom generated Hosts - DO NOT REMOVE THIS MARK
+127.0.0.1 myapp.test
+127.0.0.1 another-site.test
+# /Envloom
+```
+
+### Reconciliation Process
+
+<Steps>
+  <Step title="Block Detection">
+    Envloom finds or creates the `# Envloom generated Hosts` block
+  </Step>
+  
+  <Step title="Orphan Cleanup">
+    Removes entries for deleted/unlinked sites
+  </Step>
+  
+  <Step title="Missing Additions">
+    Adds entries for newly created sites
+  </Step>
+  
+  <Step title="External Reconciliation">
+    If an Envloom domain appears **outside** the block, it's moved inside
+  </Step>
+</Steps>
+
+<Warning>
+  Envloom respects the **Herd** hosts block and will not modify entries within it. Both tools can coexist.
+</Warning>
+
+### UAC Elevation
+
+Modifying the hosts file requires administrator privileges:
+
+1. **First attempt**: Try writing directly
+2. **If denied**: Launch `hosts-update-elevated.cmd` with UAC prompt
+3. **User action**: Accept UAC dialog to apply changes
+
+<Note>
+  The elevation script is located at `sites/hosts-update-elevated.cmd` and is auto-generated.
+</Note>
+
+## Site Deletion
+
+### Delete Options
+
+<Tabs>
+  <Tab title="Unlink Only">
+    ```json Delete request (deleteFiles: false)
+    {
+      "siteId": "uuid-here",
+      "deleteFiles": false
+    }
+    ```
+    
+    **Removes**:
+    - Site record from `sites.json`
+    - Nginx config file (`sites/{domain}.conf`)
+    - Hosts file entry
+    - Site-specific Nginx logs
+    
+    **Preserves**:
+    - Project files on disk
+    - Database data
+  </Tab>
+  
+  <Tab title="Delete Files">
+    ```json Delete request (deleteFiles: true)
+    {
+      "siteId": "uuid-here",
+      "deleteFiles": true
+    }
+    ```
+    
+    **Removes**:
+    - Site record from `sites.json`
+    - Nginx config file
+    - Hosts file entry
+    - Site-specific logs
+    - **Entire project directory** (use with caution!)
+  </Tab>
+</Tabs>
+
+<Warning>
+  Deleting files is **irreversible**. Ensure you have backups before deleting a site with `deleteFiles: true`.
+</Warning>
+
+## SSL Certificate Management
+
+See the dedicated [SSL & Networking](/features/ssl-networking) page for details on certificate generation and trust.
+
+## CLI Commands
+
+```bash Site management from CLI
+# Link current directory as a site
+cd /path/to/project
+loom link
+
+# Unlink current directory
+loom unlink
+
+# Enable SSL for current site
+loom ssl on
+
+# Disable SSL for current site
+loom ssl off
+
+# List all sites (desktop UI only)
+# Open Sites page to view all sites
+```
+
+## Dashboard Integration
+
+The **Dashboard** shows up to 10 recent sites with:
+
+- Site name and domain
+- SSL status indicator
+- Linked vs. Created badge
+- PHP version
+- Quick link to **View more** (opens Sites page)
+
+## Troubleshooting
+
+### Site Not Accessible
+
+1. **Check hosts file**: Verify `127.0.0.1 {domain}` entry exists
+2. **Verify Nginx config**: Run `nginx -t` from `bin/nginx/current`
+3. **Check Nginx status**: Ensure Nginx is running (Dashboard shows status)
+4. **PHP-FPM running**: Verify PHP-FPM for the selected version is active
+5. **Review logs**: Check `logs/nginx/sites/{domain}.error.log`
+
+### SSL Certificate Errors
+
+1. **Trust CA**: Ensure local CA is trusted (see [SSL docs](/features/ssl-networking))
+2. **Regenerate cert**: Click **Regenerate SSL** on the site detail page
+3. **Check files**: Verify `sites/certs/{domain}.crt` and `.key` exist
+4. **Browser cache**: Clear browser SSL cache and restart
+
+### Provisioning Fails
+
+1. **PHP not installed**: Install required PHP version first
+2. **Composer missing**: Ensure Composer is downloaded (`bin/composer/composer.phar`)
+3. **Port conflicts**: Close other services using ports 9000-9099
+4. **Directory exists**: Target directory must be empty for new sites
+5. **NPM errors**: Run `npm install --legacy-peer-deps` manually if needed
+
+### Hosts File Won't Update
+
+1. **UAC required**: Accept the elevation prompt when it appears
+2. **Permissions**: Ensure you have admin rights on your machine
+3. **File lock**: Close editors that might have `hosts` file open
+4. **Manual edit**: As fallback, manually add `127.0.0.1 {domain}` to hosts
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Runtime Management" href="/features/runtimes" icon="gear">
+    Install and manage PHP versions for sites
+  </Card>
+  <Card title="SSL & Networking" href="/features/ssl-networking" icon="lock">
+    Configure local SSL certificates
+  </Card>
+</CardGroup>

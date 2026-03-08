@@ -1,0 +1,375 @@
+---
+title: 'PHP Runtime'
+description: 'Manage PHP versions, configuration, and FPM services in Envloom'
+icon: 'php'
+---
+
+## Overview
+
+Envloom provides comprehensive PHP runtime management with support for multiple versions, per-version configuration, PHP-FPM process management, and Composer integration. All PHP installations are managed locally in the `bin/php/` directory with automatic version detection and update checking.
+
+## Version Management
+
+### Installing PHP Versions
+
+Envloom downloads PHP releases from the official Windows PHP distribution and manages them by major.minor version lines.
+
+<Steps>
+  <Step title="Browse Available Versions">
+    Navigate to the PHP page in the Envloom UI to see all available major.minor version lines (e.g., 8.3, 8.2, 8.1).
+  </Step>
+  
+  <Step title="Install Latest Build">
+    Click the install button next to any version line to download and install the latest build for that line.
+  </Step>
+  
+  <Step title="Automatic Setup">
+    Envloom automatically:
+    - Downloads the Thread-Safe x64 build
+    - Verifies SHA256 checksums when available
+    - Extracts to `bin/php/<version>/`
+    - Generates version-specific `php.ini`
+    - Starts PHP-FPM on the assigned port
+  </Step>
+</Steps>
+
+### Version Detection
+
+On startup, Envloom:
+- Scans `bin/php/` for existing installations
+- Detects installed versions from directory names (e.g., `8.3`, `8.2`)
+- Validates that `php.exe` and `php-cgi.exe` exist
+- Automatically recovers from corrupted installations
+
+<Note>
+  PHP versions are cached from `releases.json` with a 1-hour TTL. Update checks run hourly in the background when `autoUpdate` is enabled.
+</Note>
+
+### Setting the Current Version
+
+The "current" PHP version is used globally for CLI commands and new sites.
+
+```bash
+# Via CLI
+loom php 8.3
+
+# Via UI
+# Select version in PHP page and click "Set as Current"
+```
+
+Envloom creates a junction at `bin/php/current` pointing to the active version, allowing the `php.cmd` shim to resolve automatically.
+
+### Uninstalling Versions
+
+```bash
+# Via CLI
+loom php uninstall 8.2
+
+# Via UI
+# Click uninstall button next to installed version
+```
+
+<Warning>
+  Uninstalling a PHP version will stop its FPM process and remove the entire version directory. Sites using that version will fail until reassigned.
+</Warning>
+
+## PHP-FPM Port Management
+
+### Port Assignment
+
+Each PHP version runs on a unique port calculated from a configurable base port:
+
+```rust
+// Default base: 9000
+// Port calculation: base + (major * 10) + minor
+// Examples:
+PHP 8.3 → 9083
+PHP 8.2 → 9082
+PHP 8.1 → 9081
+PHP 7.4 → 9074
+```
+
+### Configuring Base Port
+
+Change the base port in the PHP settings page. All version ports recalculate automatically:
+
+```typescript
+await setPhpBasePort(9100);
+// PHP 8.3 → 9183
+// PHP 8.2 → 9182
+```
+
+### FPM Process Management
+
+PHP-FPM processes are managed as `php-cgi.exe` instances:
+
+<CodeGroup>
+```powershell Start FPM
+Start-Process -WindowStyle Hidden `
+  -FilePath "bin/php/8.3/php-cgi.exe" `
+  -ArgumentList "-b","9083","-c","bin/php/8.3/php.ini"
+```
+
+```powershell Stop FPM
+Get-Process -Name 'php-cgi' | 
+  Where-Object { $_.ExecutablePath -like 'bin/php/*' } |
+  Stop-Process -Force
+```
+</CodeGroup>
+
+<Note>
+  FPM services auto-start on app launch if `autoStartServices` is enabled, and auto-stop on app exit.
+</Note>
+
+## PHP Configuration (php.ini)
+
+### Configuration Structure
+
+Envloom uses a hierarchical configuration system:
+
+1. **Base template** (`config/php/php.ini`) - Global defaults
+2. **Version overrides** (`config/php/<version>.ini`) - Per-version customization
+3. **Runtime logs** - Automatically injected log paths
+
+### Managed Values
+
+Envloom manages these values automatically in all `php.ini` files:
+
+```ini
+; --- Envloom managed values ---
+upload_max_filesize = 128M
+post_max_size = 128M
+memory_limit = 256M
+; --- /Envloom managed values ---
+```
+
+Change these via UI or API:
+
+```typescript
+await setPhpIniValues("256", "512");
+// maxUploadSizeMb, memoryLimitMb
+```
+
+### Required Extensions
+
+Envloom enforces required extensions for Laravel compatibility:
+
+```ini
+; --- Envloom required extensions ---
+[PHP]
+extension_dir = "ext"
+extension=pdo_sqlite
+extension=sqlite3
+extension=pdo_mysql
+extension=pdo_pgsql
+extension=pdo_odbc
+extension=zip
+extension=openssl
+extension=curl
+extension=mbstring
+extension=fileinfo
+; --- /Envloom required extensions ---
+```
+
+### Runtime Logging
+
+Each PHP version logs errors to a dedicated file:
+
+```ini
+; --- Envloom runtime logging ---
+log_errors = On
+error_log = "logs/php/php-8_3.error.log"
+; --- /Envloom runtime logging ---
+```
+
+Access logs from the Logs page or systray menu.
+
+### Editing php.ini
+
+<Accordion title="Edit Base Configuration">
+  1. Navigate to PHP page
+  2. Click "Open php.ini" in systray or settings
+  3. Edit `config/php/php.ini`
+  4. Changes apply to all versions on next reload
+</Accordion>
+
+<Accordion title="Edit Version-Specific Overrides">
+  1. Edit `config/php/<version>.ini` (e.g., `8.3.ini`)
+  2. Add custom directives
+  3. Reload Envloom or run `loom reload`
+</Accordion>
+
+## Composer Integration
+
+### Installation
+
+Composer is automatically downloaded during bootstrap:
+- Downloaded to `bin/composer/composer.phar`
+- Shim created at `bin/composer.cmd`
+- Added to PATH automatically
+
+### Usage
+
+```bash
+# Global usage
+composer create-project laravel/laravel my-app
+
+# Uses current PHP version
+php bin/composer/composer.phar install
+
+# Version-specific
+bin/php/8.3/php.exe bin/composer/composer.phar install
+```
+
+### Laravel Installer
+
+Envloom tracks and manages the Laravel Installer:
+
+```typescript
+// Check status
+const catalog = await getPhpCatalog();
+console.log(catalog.laravelInstaller.installed); // true/false
+console.log(catalog.laravelInstaller.version);   // "5.8.3"
+
+// Install or update
+await installOrUpdateLaravelInstaller();
+```
+
+## CLI Commands
+
+### Version Switching
+
+```bash
+# Set current version
+loom php 8.3
+
+# List installed versions
+loom list php
+
+# Check current version
+loom current
+```
+
+### Shims
+
+Envloom creates version-specific shims for direct access:
+
+```bash
+# Current version
+php --version
+
+# Specific version
+php83 --version
+php82 --version
+php81 --version
+```
+
+Shims are automatically created at `bin/php<major><minor>.cmd` for all installed versions.
+
+## Site-Specific PHP Versions
+
+Each site can use a different PHP version:
+
+```typescript
+// Set PHP version for a site
+await setSitePhpVersion(siteId, "8.2");
+
+// Regenerates nginx config with correct FPM port
+// Port: 9000 + (8 * 10) + 2 = 9082
+```
+
+The site's nginx config automatically uses the correct `fastcgi_pass` port:
+
+```nginx
+location ~ \.php$ {
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    fastcgi_pass 127.0.0.1:9082;  # PHP 8.2 FPM port
+}
+```
+
+## Update Checking
+
+Envloom checks for PHP updates hourly (configurable via `autoUpdate` setting):
+
+<Steps>
+  <Step title="Cache Check">
+    Fetches `releases.json` if cache is older than 1 hour
+  </Step>
+  
+  <Step title="Version Comparison">
+    Compares installed builds against latest available builds per line
+  </Step>
+  
+  <Step title="Update Notification">
+    Displays "Update" button in UI for outdated installations
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### FPM Not Starting
+
+Check `logs/php/php-<version>.error.log` for startup errors:
+
+```bash
+# Via CLI
+loom logs php 8.3
+
+# Manual check
+type logs\php\php-8_3.error.log
+```
+
+Common issues:
+- Port already in use
+- Missing extensions
+- Syntax errors in php.ini
+
+### Corrupted Installation
+
+Envloom automatically detects corrupted installations on startup:
+
+```rust
+// Validation checks:
+- php.exe exists
+- php-cgi.exe exists
+- php.ini is readable
+- Directory structure is intact
+```
+
+Corrupted installations are removed automatically. Reinstall from the UI.
+
+### Port Conflicts
+
+```bash
+# Check if port is in use
+netstat -ano | findstr :9083
+
+# Change base port to avoid conflicts
+# UI: PHP Settings > Base Port > 9100
+```
+
+## API Reference
+
+```typescript
+// Get catalog with all versions and config
+const catalog = await getPhpCatalog();
+
+// Install latest build for a line
+await installLatestPhp("8.3");
+
+// Set active version within a line
+await setActivePhp("8.3", "8.3.14");
+
+// Set current line globally
+await setPhpCurrentLine("8.3");
+
+// Update configuration
+await setPhpIniValues("256", "512");
+await setPhpBasePort(9100);
+
+// Uninstall version
+await uninstallPhpLine("8.2");
+```
+
+See `src/features/runtimes/php-api.ts` for complete TypeScript definitions.

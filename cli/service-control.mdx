@@ -1,0 +1,320 @@
+---
+title: Service Control
+description: Control Envloom services and view logs (planned CLI commands)
+---
+
+<Note>
+Service control commands are **not yet implemented** in the Envloom CLI. This page documents planned features for future releases.
+</Note>
+
+## Planned Commands
+
+The following service control commands are planned for a future version of the Envloom CLI:
+
+### loom start
+
+Start Envloom services.
+
+**Planned Syntax:**
+```bash
+loom start [service]
+```
+
+**Examples:**
+```bash
+# Start all services
+loom start
+
+# Start specific service
+loom start nginx
+loom start php
+loom start mysql
+```
+
+### loom stop
+
+Stop Envloom services.
+
+**Planned Syntax:**
+```bash
+loom stop [service]
+```
+
+**Examples:**
+```bash
+# Stop all services
+loom stop
+
+# Stop specific service
+loom stop nginx
+loom stop php
+loom stop mysql
+```
+
+### loom reload
+
+Reload service configurations without stopping.
+
+**Planned Syntax:**
+```bash
+loom reload [service]
+```
+
+**Examples:**
+```bash
+# Reload all services
+loom reload
+
+# Reload specific service
+loom reload nginx
+loom reload php
+```
+
+### loom open
+
+Open a linked site in the default browser.
+
+**Planned Syntax:**
+```bash
+loom open <site>
+```
+
+**Examples:**
+```bash
+# Open specific site
+loom open my-app.test
+
+# Open current directory's site
+loom open
+```
+
+### loom logs
+
+View service logs from the terminal.
+
+**Planned Syntax:**
+```bash
+loom logs <runtime> [--follow]
+```
+
+**Examples:**
+```bash
+# View PHP logs
+loom logs php
+
+# View Nginx logs
+loom logs nginx
+
+# View MariaDB logs
+loom logs mysql
+
+# Follow logs in real-time
+loom logs nginx --follow
+```
+
+## Current Workarounds
+
+While these CLI commands are not yet available, you can manage services using the desktop application:
+
+### Starting and Stopping Services
+
+1. Open the Envloom desktop app
+2. Navigate to the **Dashboard** page
+3. Use the **Start All** or **Stop All** buttons
+4. Or manage individual services from their respective pages
+
+### Reloading Nginx
+
+To reload Nginx configuration after manual edits:
+
+```bash
+nginx -s reload
+```
+
+Or use the systray menu:
+1. Right-click the Envloom systray icon
+2. Select **Reload all**
+
+### Opening Sites
+
+To open a site in your browser:
+
+**Option 1: Manual URL**
+```bash
+start https://my-app.test
+```
+
+**Option 2: Desktop App**
+1. Open Envloom
+2. Go to **Sites** page
+3. Click on the site name or domain
+
+**Option 3: Systray Menu**
+1. Right-click the Envloom systray icon
+2. Hover over **Sites**
+3. Click on your site
+
+### Viewing Logs
+
+To view logs, use the desktop application:
+
+1. Open Envloom
+2. Navigate to the **Logs** page
+3. Select the runtime/service:
+   - **Runtime** - General Envloom logs
+   - **PHP** - PHP error logs (by version)
+   - **Nginx** - Access and error logs (global or per-site)
+   - **MySQL** - MariaDB error, general, and slow query logs
+4. Use the integrated log viewer to browse, search, and filter
+
+**Alternative: Direct file access**
+
+Logs are stored in the `logs` directory:
+
+```
+<envloom>/logs/
+├── runtime.log                  # Envloom operations log
+├── php/
+│   ├── php-8_4.error.log       # PHP 8.4 errors
+│   └── php-8_5.error.log       # PHP 8.5 errors
+├── nginx/
+│   ├── access.log              # Global Nginx access log
+│   ├── error.log               # Global Nginx error log
+│   ├── my-app.test.access.log  # Site-specific access log
+│   └── my-app.test.error.log   # Site-specific error log
+└── mariadb/
+    ├── mariadb.error.log       # MariaDB errors
+    ├── mariadb.general.log     # General query log
+    └── mariadb.slow.log        # Slow query log
+```
+
+**View logs with tail:**
+```bash
+tail -f <envloom>/logs/nginx/error.log
+```
+
+**View logs with PowerShell:**
+```powershell
+Get-Content -Path "<envloom>\logs\runtime.log" -Tail 50 -Wait
+```
+
+## Service Status
+
+To check service status, use the desktop app:
+
+1. Open Envloom
+2. View the **Dashboard**
+3. Service status cards show:
+   - **Running** (green)
+   - **Stopped** (gray)
+   - **Starting** (yellow)
+   - **Error** (red)
+
+**Manual status checks:**
+
+**Check if Nginx is running:**
+```bash
+tasklist | findstr nginx.exe
+```
+
+**Check if PHP-FPM is running:**
+```bash
+tasklist | findstr php-cgi.exe
+```
+
+**Check if MariaDB is running:**
+```bash
+tasklist | findstr mariadbd.exe
+```
+
+**Check if a port is open:**
+```powershell
+Test-NetConnection -ComputerName 127.0.0.1 -Port 80   # Nginx
+Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 # MariaDB
+Test-NetConnection -ComputerName 127.0.0.1 -Port 9085 # PHP 8.5 FPM
+```
+
+## Development Roadmap
+
+The following features are tracked in `FEATURES.md` for future releases:
+
+- [ ] `loom start|stop|reload` - Service lifecycle management
+- [ ] `loom open <site>` - Browser integration
+- [ ] `loom logs <runtime>` - Terminal log viewer
+
+Check the [GitHub repository](https://github.com/envloom/envloom) for updates on these features.
+
+## Contributing
+
+If you'd like to contribute to implementing these CLI commands:
+
+1. Review the source code in `src-tauri/src/lib.rs`
+2. Look for the `run_cli()` function and existing command implementations
+3. Follow the established patterns for:
+   - Command parsing
+   - Error handling
+   - State management
+   - Output formatting
+
+See [CONTRIBUTING.md](https://github.com/envloom/envloom/blob/main/CONTRIBUTING.md) for development guidelines.
+
+## Alternative: Systray Quick Actions
+
+While CLI service commands are not available, the **systray menu** provides quick access to common operations:
+
+**Global Actions:**
+- Start all
+- Stop all
+- Reload all
+- Quit
+
+**PHP Submenu:**
+- Current version indicator
+- Switch version
+- Add version
+- Open `php.ini`
+- Open extensions directory
+- Open logs directory
+
+**Nginx Submenu:**
+- Enable SSL for all sites
+- Disable SSL for all sites
+- Open configs directory
+- Open access log
+- Open error log
+
+**MySQL Submenu:**
+- Current version indicator
+- Switch version
+- Add version
+
+**Node Submenu:**
+- Current version indicator
+- Switch version
+- Add version
+
+**Sites Submenu:**
+- Quick links to all linked sites
+
+To access the systray menu:
+1. Look for the Envloom icon in your Windows system tray
+2. Right-click the icon
+3. Select the desired action
+
+<Tip>
+Left-click the systray icon to quickly open/focus the main Envloom window.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CLI Overview" icon="terminal" href="/cli/overview">
+    Learn about available CLI commands
+  </Card>
+  <Card title="Runtime Management" icon="server" href="/cli/runtime-management">
+    Switch PHP, Node, and MySQL versions
+  </Card>
+  <Card title="Site Management" icon="globe" href="/cli/site-management">
+    Link projects and configure sites
+  </Card>
+</CardGroup>

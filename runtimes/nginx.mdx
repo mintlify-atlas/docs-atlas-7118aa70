@@ -1,0 +1,748 @@
+---
+title: 'Nginx Runtime'
+description: 'Manage Nginx web server, site configurations, SSL certificates, and logs in Envloom'
+icon: 'server'
+---
+
+## Overview
+
+Envloom uses Nginx as the web server for all PHP sites with automatic configuration generation, local SSL certificate management, per-site logging, and hot-reload capabilities. Nginx is installed automatically during bootstrap.
+
+## Installation
+
+### Automatic Bootstrap
+
+Nginx downloads and configures automatically on first launch:
+
+<Steps>
+  <Step title="Fetch Latest Release">
+    Queries GitHub API for latest nginx/nginx release
+  </Step>
+  
+  <Step title="Download ZIP">
+    Downloads the Windows ZIP (e.g., `nginx-1.25.3.zip`)
+  </Step>
+  
+  <Step title="Extract and Configure">
+    Extracts to `bin/nginx/<version>/` and flattens nested directory structure
+  </Step>
+  
+  <Step title="Set Current Link">
+    Creates junction at `bin/nginx/current` pointing to installed version
+  </Step>
+  
+  <Step title="Configure Sites Include">
+    Modifies `conf/nginx.conf` to include site configs from `sites/*.conf`
+  </Step>
+</Steps>
+
+<Note>
+  Nginx installation is non-blocking. The app continues loading while Nginx downloads in the background.
+</Note>
+
+### Version Detection
+
+Installed Nginx version is detected by:
+
+1. Scanning `bin/nginx/` for directories with `nginx.exe`
+2. Running `nginx.exe -v` to extract version string
+3. Parsing output like `nginx version: nginx/1.25.3`
+
+```rust
+fn detect_nginx_version_from_binary(nginx_root: &PathBuf) -> Option<String> {
+    let nginx_exe = nginx_root.join("current").join("nginx.exe");
+    let output = Command::new(&nginx_exe).arg("-v").output().ok()?;
+    // Parse version from stderr output
+}
+```
+
+### Manual Installation
+
+If auto-install fails, manually place Nginx in `bin/nginx/<version>/`:
+
+```bash
+# Download from nginx.org
+curl -O https://nginx.org/download/nginx-1.25.3.zip
+
+# Extract
+unzip nginx-1.25.3.zip
+
+# Move to Envloom
+move nginx-1.25.3 C:\path\to\envloom\bin\nginx\1.25.3
+
+# Create junction
+mklink /J C:\path\to\envloom\bin\nginx\current C:\path\to\envloom\bin\nginx\1.25.3
+```
+
+## Configuration
+
+### Main Configuration (nginx.conf)
+
+Envloom modifies the default `nginx.conf` to include site configs:
+
+```nginx
+http {
+    # ... default config ...
+    
+    # Envloom global logs
+    error_log     C:/path/to/envloom/logs/nginx/error.log;
+    access_log    C:/path/to/envloom/logs/nginx/access.log;
+    
+    # Include all site configs
+    include       C:/path/to/envloom/sites/*.conf;
+}
+```
+
+This injection happens automatically via `ensure_nginx_sites_include()`.
+
+### Site Configuration Generation
+
+Each site gets its own config file in `sites/<domain>.conf`:
+
+<CodeGroup>
+```nginx HTTP Only
+server {
+    listen 80;
+    server_name mysite.test;
+    access_log C:/path/to/logs/nginx/sites/mysite.test.access.log;
+    error_log C:/path/to/logs/nginx/sites/mysite.test.error.log;
+    
+    root C:/path/to/mysite/public;
+    index index.php index.html index.htm;
+    
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+    
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass 127.0.0.1:9083;  # PHP 8.3 FPM port
+    }
+}
+```
+
+```nginx HTTPS Enabled
+server {
+    listen 80;
+    server_name mysite.test;
+    access_log C:/path/to/logs/nginx/sites/mysite.test.access.log;
+    error_log C:/path/to/logs/nginx/sites/mysite.test.error.log;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name mysite.test;
+    access_log C:/path/to/logs/nginx/sites/mysite.test.access.log;
+    error_log C:/path/to/logs/nginx/sites/mysite.test.error.log;
+    ssl_certificate C:/path/to/sites/certs/mysite.test.crt;
+    ssl_certificate_key C:/path/to/sites/certs/mysite.test.key;
+    
+    root C:/path/to/mysite/public;
+    index index.php index.html index.htm;
+    
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+    
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass 127.0.0.1:9083;
+    }
+}
+```
+</CodeGroup>
+
+### Path Normalization
+
+Windows paths are converted to Nginx format:
+
+```rust
+fn to_nginx_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+// Example:
+// C:\Users\Dev\envloom\sites\mysite
+// → C:/Users/Dev/envloom/sites/mysite
+```
+
+### PHP-FPM Integration
+
+Each site config references the PHP-FPM port for its assigned PHP version:
+
+```rust
+let php_fpm_port = line_port(php_config.base_port, &site.php_version);
+// base_port: 9000
+// PHP 8.3 → 9083
+// PHP 8.2 → 9082
+
+write_nginx_site_config(
+    &nginx_root,
+    &sites_dir,
+    &site.domain,
+    &site.path,
+    php_fpm_port,  // Injected into fastcgi_pass
+    site.ssl_enabled
+);
+```
+
+## Service Management
+
+### Starting Nginx
+
+Nginx starts automatically if `autoStartServices` is enabled:
+
+```powershell
+Start-Process -WindowStyle Hidden `
+  -FilePath "bin/nginx/current/nginx.exe" `
+  -WorkingDirectory "bin/nginx/current"
+```
+
+<Note>
+  Nginx must start from its own directory (`-p` flag or working directory) to correctly resolve relative paths in `nginx.conf`.
+</Note>
+
+### Stopping Nginx
+
+```bash
+# Graceful shutdown
+nginx.exe -s quit
+
+# Fast shutdown
+nginx.exe -s stop
+
+# Via PowerShell (Envloom method)
+Get-Process -Name 'nginx' | 
+  Where-Object { $_.Path -like 'bin/nginx/*' } |
+  Stop-Process -Force
+```
+
+Envloom stops Nginx automatically on app exit.
+
+### Reloading Configuration
+
+Reload Nginx without downtime after config changes:
+
+```bash
+# Via CLI (future)
+loom reload
+
+# Direct Nginx command
+nginx.exe -s reload
+
+# Via Envloom API
+await reloadNginx();
+```
+
+<Tabs>
+  <Tab title="Configuration Test">
+    Always test config before reload:
+    
+    ```bash
+    nginx.exe -t
+    ```
+    
+    Envloom automatically tests config before starting or reloading.
+  </Tab>
+  
+  <Tab title="Automatic Reload">
+    Envloom reloads Nginx automatically when:
+    - New site is created
+    - Site SSL is toggled
+    - Site PHP version changes
+    - Site is unlinked/deleted
+  </Tab>
+</Tabs>
+
+### Process Detection
+
+```rust
+fn is_process_running(name: &str) -> bool {
+    // Checks Windows task list for nginx.exe
+}
+
+if !is_process_running("nginx.exe") {
+    start_nginx_if_needed(&nginx_root)?;
+}
+```
+
+## SSL Certificate Management
+
+### Local Certificate Authority
+
+Envloom creates a persistent local CA for signing site certificates:
+
+```rust
+// CA stored at sites/ca/
+sites/
+├── ca/
+│   ├── ca.crt      # CA certificate (trust this in browser)
+│   ├── ca.key      # CA private key
+│   └── ca.der      # CA certificate (DER format)
+├── certs/
+│   ├── mysite.test.crt
+│   ├── mysite.test.key
+│   └── ...
+└── *.conf
+```
+
+### Generating Site Certificates
+
+Certificates are generated using the `rcgen` crate:
+
+<Steps>
+  <Step title="Load or Create CA">
+    If CA doesn't exist, generate new RSA 4096-bit CA with 10-year validity
+  </Step>
+  
+  <Step title="Generate Site Keypair">
+    Create RSA 2048-bit keypair for the site domain
+  </Step>
+  
+  <Step title="Sign with CA">
+    Sign site certificate with CA, valid for 825 days
+  </Step>
+  
+  <Step title="Write Files">
+    Save `<domain>.crt` and `<domain>.key` to `sites/certs/`
+  </Step>
+</Steps>
+
+```rust
+fn ensure_site_ssl_cert(
+    sites_dir: &Path, 
+    domain: &str
+) -> Result<(PathBuf, PathBuf), String> {
+    let ca = ensure_local_ca(sites_dir)?;
+    let cert_dir = sites_dir.join("certs");
+    
+    let crt_path = cert_dir.join(format!("{domain}.crt"));
+    let key_path = cert_dir.join(format!("{domain}.key"));
+    
+    if crt_path.exists() && key_path.exists() {
+        return Ok((crt_path, key_path));
+    }
+    
+    // Generate new certificate signed by CA
+    let site_cert = generate_site_certificate(domain, &ca)?;
+    write_pem(&crt_path, &site_cert.certificate)?;
+    write_pem(&key_path, &site_cert.private_key)?;
+    
+    Ok((crt_path, key_path))
+}
+```
+
+### Trusting the CA
+
+To eliminate browser warnings, trust the CA certificate:
+
+<Tabs>
+  <Tab title="Windows">
+    ```powershell
+    # Import CA to Trusted Root Certification Authorities
+    certutil -addstore -user Root sites\ca\ca.crt
+    
+    # Or via UI
+    # Double-click ca.crt > Install Certificate > Current User > 
+    # Place in: Trusted Root Certification Authorities
+    ```
+  </Tab>
+  
+  <Tab title="Chrome/Edge">
+    Uses Windows certificate store automatically after certutil import.
+  </Tab>
+  
+  <Tab title="Firefox">
+    Firefox uses its own certificate store:
+    
+    1. Open Settings > Privacy & Security > Certificates > View Certificates
+    2. Authorities tab > Import
+    3. Select `sites/ca/ca.crt`
+    4. Trust for identifying websites
+  </Tab>
+</Tabs>
+
+### SSL Toggle Per Site
+
+```typescript
+// Enable SSL for a site
+await toggleSiteSSL(siteId, true);
+
+// Regenerates nginx config with:
+// - HTTP redirect to HTTPS
+// - HTTPS server block with ssl_certificate directives
+// - Reloads nginx
+```
+
+### Bulk SSL Operations
+
+From systray menu:
+
+```rust
+// Enable SSL for all sites
+TRAY_MENU_SSL_ALL_ON => {
+    for site in sites {
+        site.ssl_enabled = true;
+        regenerate_nginx_config(&site);
+    }
+    reload_nginx();
+}
+
+// Disable SSL for all sites
+TRAY_MENU_SSL_ALL_OFF => {
+    for site in sites {
+        site.ssl_enabled = false;
+        regenerate_nginx_config(&site);
+    }
+    reload_nginx();
+}
+```
+
+## Logging
+
+### Global Logs
+
+```bash
+logs/nginx/
+├── access.log   # All HTTP requests across all sites
+├── error.log    # Nginx startup errors and warnings
+└── sites/
+    ├── mysite.test.access.log
+    ├── mysite.test.error.log
+    └── ...
+```
+
+### Per-Site Logs
+
+Each site gets dedicated access and error logs:
+
+```nginx
+server {
+    access_log C:/path/to/logs/nginx/sites/mysite.test.access.log;
+    error_log  C:/path/to/logs/nginx/sites/mysite.test.error.log;
+    # ...
+}
+```
+
+### Log Viewing
+
+<Tabs>
+  <Tab title="Envloom UI">
+    Navigate to Logs page > Nginx tab:
+    
+    - **General selector**: Global access/error logs
+    - **Per-site selector**: Individual site logs
+    - Uses `@melloware/react-logviewer` for syntax highlighting
+  </Tab>
+  
+  <Tab title="Systray Menu">
+    Right-click Envloom icon > Nginx > Logs:
+    
+    - Open Access Log (global)
+    - Open Error Log (global)
+    - Open Site Configs Directory
+  </Tab>
+  
+  <Tab title="CLI">
+    ```bash
+    # Via tail (future feature)
+    loom logs nginx
+    
+    # Manual
+    type logs\nginx\access.log
+    Get-Content logs\nginx\error.log -Tail 50 -Wait
+    ```
+  </Tab>
+</Tabs>
+
+### Log Reconciliation
+
+Orphan log files are cleaned up automatically:
+
+```rust
+fn reconcile_nginx_site_configs(sites_dir: &Path, domains: &[String]) {
+    // Remove *.conf for deleted sites
+    // Remove *.access.log and *.error.log for deleted sites
+}
+```
+
+## Hosts File Management
+
+Envloom manages the Windows hosts file for local domains:
+
+### Hosts Block Structure
+
+```hosts
+# Envloom generated Hosts - do not edit manually
+127.0.0.1 mysite.test
+127.0.0.1 another.test
+127.0.0.1 project.test
+# End Envloom Hosts
+```
+
+<Warning>
+  Envloom owns entries within its block. Manual edits will be overwritten. For custom domains, add them outside the Envloom block.
+</Warning>
+
+### Automatic Updates
+
+Hosts file updates automatically when:
+- New site is created
+- Site domain changes
+- Site is unlinked/deleted
+
+### Elevated Permissions
+
+Modifying hosts requires admin rights. Envloom handles this via UAC:
+
+```rust
+// Attempt direct write
+let result = fs::write(&hosts_path, new_content);
+
+if result.is_err() {
+    // Elevate and retry via PowerShell
+    let script = format!(
+        "Start-Process -Verb RunAs powershell -ArgumentList \
+         '-NoProfile -Command \"Set-Content -Path {} -Value ...\""
+    );
+    run_powershell(&script)?;
+}
+```
+
+### Hosts Reconciliation
+
+Envloom reconciles the hosts file on startup:
+
+```rust
+// Move orphan Envloom domains into the managed block
+// Remove domains for deleted sites
+// Preserve non-Envloom entries (e.g., Herd sites)
+```
+
+<Note>
+  Envloom preserves hosts entries from other tools like Laravel Herd by using separate comment blocks.
+</Note>
+
+## Configuration Reconciliation
+
+Envloom maintains consistency between sites and Nginx configs:
+
+### On Startup
+
+```rust
+// Scan sites directory for *.conf files
+// Compare against registered sites
+// Remove configs for unregistered sites
+// Regenerate configs for sites with missing *.conf
+```
+
+### On Site Operations
+
+- **Create site**: Generate new `<domain>.conf`
+- **Update PHP version**: Regenerate config with new FPM port
+- **Toggle SSL**: Regenerate config with/without HTTPS
+- **Unlink site**: Remove `<domain>.conf`
+
+### Orphan Cleanup
+
+```rust
+fn reconcile_nginx_site_configs(sites_dir: &Path, domains: &[String]) {
+    let managed: HashSet<String> = domains.iter()
+        .map(|d| d.trim().to_lowercase())
+        .collect();
+    
+    for entry in fs::read_dir(sites_dir)? {
+        if entry.extension() == "conf" {
+            let domain = entry.file_stem()?;
+            if !managed.contains(&domain) {
+                fs::remove_file(entry)?;  // Orphan
+            }
+        }
+    }
+}
+```
+
+## CLI Commands
+
+### Direct Nginx Commands
+
+```bash
+# Test configuration
+nginx -t
+
+# Start (if not running)
+nginx
+
+# Stop gracefully
+nginx -s quit
+
+# Stop immediately
+nginx -s stop
+
+# Reload config
+nginx -s reload
+
+# Reopen log files
+nginx -s reopen
+```
+
+### Envloom CLI (Future)
+
+```bash
+# Reload all services
+loom reload
+
+# View nginx logs
+loom logs nginx
+
+# Open config directory
+loom open nginx configs
+```
+
+## Troubleshooting
+
+### Nginx Won't Start
+
+Check error log first:
+
+```bash
+type logs\nginx\error.log
+```
+
+<Accordion title="Port 80/443 Already in Use">
+  Find conflicting process:
+  
+  ```bash
+  netstat -ano | findstr :80
+  netstat -ano | findstr :443
+  
+  # Kill process (replace PID)
+  taskkill /PID 1234 /F
+  ```
+  
+  Common conflicts: IIS, Apache, Skype
+</Accordion>
+
+<Accordion title="Configuration Syntax Error">
+  Test config:
+  
+  ```bash
+  nginx -t
+  ```
+  
+  Fix reported errors in `nginx.conf` or site configs.
+</Accordion>
+
+<Accordion title="Permission Errors">
+  Run Envloom as administrator or check file permissions:
+  
+  ```bash
+  icacls bin\nginx /grant %USERNAME%:F /T
+  ```
+</Accordion>
+
+### 502 Bad Gateway
+
+PHP-FPM is not running or port mismatch:
+
+```bash
+# Check PHP-FPM is running
+netstat -ano | findstr :9083
+
+# Check site config fastcgi_pass matches PHP version port
+type sites\mysite.test.conf | findstr fastcgi_pass
+
+# Restart PHP-FPM
+loom reload
+```
+
+### SSL Certificate Errors
+
+Browser shows "Not Secure" warning:
+
+<Steps>
+  <Step title="Check Certificate Files Exist">
+    ```bash
+    dir sites\certs\mysite.test.*
+    ```
+  </Step>
+  
+  <Step title="Regenerate Certificate">
+    ```typescript
+    await regenerateSiteSSL(siteId);
+    ```
+  </Step>
+  
+  <Step title="Trust CA Certificate">
+    ```powershell
+    certutil -addstore -user Root sites\ca\ca.crt
+    ```
+  </Step>
+  
+  <Step title="Clear Browser Cache">
+    Restart browser to reload certificate trust store
+  </Step>
+</Steps>
+
+### Site Not Resolving
+
+Check hosts file:
+
+```bash
+type C:\Windows\System32\drivers\etc\hosts
+```
+
+Ensure domain is in Envloom block:
+
+```
+127.0.0.1 mysite.test
+```
+
+If missing, reconcile from Envloom dashboard.
+
+## Best Practices
+
+### Configuration Management
+
+- Don't edit generated site configs manually - use Envloom UI
+- Custom nginx directives: Add to main `nginx.conf` outside site includes
+- Keep `nginx.conf` backed up before major changes
+
+### Performance Tuning
+
+```nginx
+# Add to nginx.conf http block
+worker_processes auto;
+worker_connections 1024;
+keepalive_timeout 65;
+gzip on;
+gzip_types text/plain text/css application/json application/javascript;
+```
+
+### Security
+
+```nginx
+# Hide nginx version
+server_tokens off;
+
+# Add security headers
+add_header X-Frame-Options "SAMEORIGIN";
+add_header X-Content-Type-Options "nosniff";
+add_header X-XSS-Protection "1; mode=block";
+```
+
+### Logging
+
+```nginx
+# Custom log format with timing
+log_format timing '$remote_addr - $remote_user [$time_local] '
+                  '"$request" $status $body_bytes_sent '
+                  '"$http_referer" "$http_user_agent" '
+                  'rt=$request_time uct=$upstream_connect_time '
+                  'uht=$upstream_header_time urt=$upstream_response_time';
+
+access_log logs/nginx/access.log timing;
+```

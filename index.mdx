@@ -1,97 +1,75 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to Envloom"
+description: "A local development stack manager for Windows with versioned runtimes, per-site config, local SSL, and a desktop-first workflow"
 ---
 
-## Setting up
+<img
+  className="block"
+  src="https://media.brand.dev/1db1cf36-9796-4880-a354-664d093c361e.svg"
+  alt="Envloom Hero"
+  style={{ maxWidth: '400px', margin: '0 auto 2rem' }}
+/>
 
-Get your documentation site up and running in minutes.
+## What is Envloom?
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Envloom is a powerful local development environment manager designed specifically for Windows developers. It simplifies the complexity of managing multiple runtime versions, local sites, and services with an intuitive desktop interface and comprehensive CLI.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Multi-Version Runtimes" icon="layer-group" href="/features/runtimes">
+    Install and switch between PHP, Node.js, MariaDB, and Nginx versions effortlessly
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Site Management" icon="globe" href="/features/sites">
+    Create Laravel sites, link existing projects, and configure per-site PHP versions
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Local SSL Automation" icon="lock" href="/features/ssl-networking">
+    Automatic SSL certificates with local CA and hosts file management
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Service Control" icon="server" href="/features/services">
+    Start, stop, and monitor all services from a unified dashboard
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Get Started
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download and set up Envloom on your Windows machine
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Create your first local site in minutes
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Learn the powerful command-line interface
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting/common-issues">
+    Resolve common issues and debug problems
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Key Features
 
-## Need inspiration?
+<AccordionGroup>
+  <Accordion title="Runtime Management" icon="microchip">
+    Install multiple versions of PHP, Node.js, MariaDB, and Nginx. Switch between versions globally or per-site with a single command.
+  </Accordion>
+  <Accordion title="Desktop Dashboard" icon="desktop">
+    Monitor service status, view logs, manage runtimes, and configure settings from an elegant desktop interface with system tray integration.
+  </Accordion>
+  <Accordion title="Laravel Scaffolding" icon="code">
+    Create new Laravel sites with starter kits, automatic .env configuration, database setup, and NPM dependency installation.
+  </Accordion>
+  <Accordion title="Centralized Logging" icon="file-lines">
+    Access all runtime, PHP, Nginx, and MariaDB logs from a single interface with real-time viewing and filtering.
+  </Accordion>
+</AccordionGroup>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+## Why Envloom?
+
+<Note>
+  Envloom was built to provide Windows developers with the same level of local development ease that tools like Laravel Valet offer on macOS, while adding powerful multi-version runtime management and a desktop-first experience.
+</Note>
+
+- **Version Isolation**: Run different PHP or Node versions per project without conflicts
+- **Zero Configuration**: Automatic nginx configuration, SSL certificates, and hosts file updates
+- **Windows Native**: Built with Tauri for optimal performance and native Windows integration
+- **Developer Focused**: Designed by developers for developers, with both GUI and CLI workflows

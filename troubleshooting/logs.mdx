@@ -1,0 +1,353 @@
+---
+title: Understanding Logs
+description: Learn how to access and interpret Envloom log files
+---
+
+Envloom maintains detailed logs for all runtime operations. This guide explains where logs are located and how to use them for troubleshooting.
+
+## Log Directory Structure
+
+All logs are centralized in the `logs` directory at the same level as `bin`, `config`, and `sites`:
+
+```
+Envloom/
+├── bin/
+├── config/
+├── sites/
+└── logs/
+    ├── runtime.log
+    ├── php/
+    │   ├── php-8_3.error.log
+    │   ├── php-8_2.error.log
+    │   └── php-8_1.error.log
+    ├── nginx/
+    │   ├── access.log
+    │   ├── error.log
+    │   └── sites/
+    │       ├── mysite.test.access.log
+    │       ├── mysite.test.error.log
+    │       ├── another.test.access.log
+    │       └── another.test.error.log
+    └── mariadb/
+        ├── mariadb.error.log
+        ├── mariadb.general.log
+        └── mariadb.slow.log
+```
+
+## Runtime Logs
+
+### runtime.log
+
+**Location**: `logs/runtime.log`
+
+**Purpose**: Main Envloom application log tracking runtime operations, service management, and system events.
+
+**Format**:
+```log
+[2026-03-08 14:23:15] [INFO] [bootstrap] Starting PHP download
+[2026-03-08 14:23:45] [INFO] [php] Installed PHP 8.3.2
+[2026-03-08 14:24:01] [ERROR] [nginx] Failed to start: port 80 already in use
+[2026-03-08 14:25:10] [INFO] [nvm] Installing Node.js 20.11.0
+```
+
+**What it contains**:
+- Service start/stop operations
+- Runtime installations and updates
+- NVM operations (`nvm install`, `nvm use`)
+- Configuration changes
+- System-level errors
+
+**When to check**:
+- Services fail to start or stop
+- Runtime installations fail
+- General troubleshooting of Envloom behavior
+
+<Note>
+  The runtime log uses timestamp format `YYYY-MM-DD HH:MM:SS` with levels: INFO, WARN, ERROR.
+</Note>
+
+## PHP Logs
+
+### PHP Error Logs (per version)
+
+**Location**: `logs/php/php-{version}.error.log`
+
+Examples:
+- `logs/php/php-8_3.error.log`
+- `logs/php/php-8_2.error.log`
+- `logs/php/php-8_1.error.log`
+
+**Purpose**: PHP runtime errors, warnings, and notices for each installed PHP version.
+
+**Configuration**: Automatically configured via `php.ini`:
+```ini
+; --- Envloom runtime logging ---
+log_errors = On
+error_log = "/path/to/logs/php/php-8_3.error.log"
+; --- /Envloom runtime logging ---
+```
+
+**What it contains**:
+```log
+[08-Mar-2026 14:30:22 UTC] PHP Warning: Undefined variable $foo in /path/to/site/index.php on line 42
+[08-Mar-2026 14:31:15 UTC] PHP Fatal error: Uncaught Error: Call to undefined function missing_func()
+[08-Mar-2026 14:32:01 UTC] PHP Parse error: syntax error, unexpected ';' in /path/to/file.php on line 10
+```
+
+**When to check**:
+- Application shows white screen or 500 error
+- PHP warnings or notices in development
+- Fatal errors during site provisioning
+- Debugging Laravel/Symfony applications
+
+<Warning>
+  Each PHP version has its own log file. Make sure to check the log for the version your site is using.
+</Warning>
+
+### Viewing PHP Logs in Envloom
+
+1. Open Envloom application
+2. Navigate to **Logs** page
+3. Select **PHP** tab
+4. Choose version ("current" or specific version)
+5. Logs are displayed with syntax highlighting
+
+## Nginx Logs
+
+### Global Nginx Logs
+
+**Location**: `logs/nginx/`
+
+<CodeGroup>
+```log access.log
+127.0.0.1 - - [08/Mar/2026:14:35:22 +0000] "GET /index.php HTTP/1.1" 200 1234 "-" "Mozilla/5.0"
+127.0.0.1 - - [08/Mar/2026:14:35:23 +0000] "GET /assets/app.css HTTP/1.1" 200 5678 "http://mysite.test/" "Mozilla/5.0"
+```
+
+```log error.log
+2026/03/08 14:36:10 [error] 12345#0: *1 connect() failed (10061: No connection could be made) while connecting to upstream
+2026/03/08 14:37:05 [crit] 12345#0: *2 open() "/path/to/file" failed (2: No such file or directory)
+```
+</CodeGroup>
+
+**Purpose**:
+- `access.log`: All HTTP requests across all sites
+- `error.log`: Nginx-level errors (upstream connections, file access, configuration errors)
+
+### Per-Site Nginx Logs
+
+**Location**: `logs/nginx/sites/{domain}.{access|error}.log`
+
+Examples:
+- `logs/nginx/sites/mysite.test.access.log`
+- `logs/nginx/sites/mysite.test.error.log`
+
+**Purpose**: HTTP requests and errors specific to each site.
+
+**Access Log Format** (per request):
+```
+IP - - [Date] "Method Path Protocol" StatusCode Bytes "Referer" "UserAgent"
+```
+
+**Common Error Types**:
+```log
+# PHP-FPM connection failed
+[error] connect() failed (10061: No connection could be made) while connecting to upstream, upstream: "fastcgi://127.0.0.1:9000"
+
+# File not found (404)
+[error] open() "/path/to/mysite/public/missing.jpg" failed (2: No such file or directory)
+
+# Permission denied
+[crit] open() "/path/to/mysite/public/file.php" failed (13: Permission denied)
+```
+
+**When to check**:
+- 502 Bad Gateway errors (PHP-FPM not responding)
+- 404 errors (file not found)
+- Slow site performance (check access log timestamps)
+- SSL/HTTPS issues
+
+### Viewing Nginx Logs in Envloom
+
+1. Open **Logs** page
+2. Select **Nginx** tab
+3. Choose:
+   - **General**: Global access and error logs
+   - **Site-specific**: Logs for a particular domain
+4. Access log is shown on top, error log below
+
+<Note>
+  Nginx logs use standard Nginx log format. The access log can become large; consider rotating logs periodically.
+</Note>
+
+## MariaDB Logs
+
+### MariaDB Error Log
+
+**Location**: `logs/mariadb/mariadb.error.log`
+
+**Purpose**: Database server errors, warnings, and startup messages.
+
+**What it contains**:
+```log
+2026-03-08 14:40:00 0 [Note] Server socket created on IP: '127.0.0.1'.
+2026-03-08 14:40:01 0 [Note] mariadbd: ready for connections.
+2026-03-08 14:41:15 8 [Warning] Aborted connection 8 to db: 'mydb' user: 'root' host: 'localhost'
+2026-03-08 14:42:30 0 [ERROR] Can't start server: Bind on TCP/IP port: Address already in use
+```
+
+**When to check**:
+- MariaDB fails to start
+- Port conflicts
+- Corrupted tables or databases
+- Authentication failures
+
+### MariaDB General Query Log
+
+**Location**: `logs/mariadb/mariadb.general.log`
+
+**Purpose**: All queries executed by MariaDB (enabled by default in Envloom).
+
+**What it contains**:
+```log
+2026-03-08 14:45:10    12 Connect   root@localhost on mydb
+2026-03-08 14:45:11    12 Query     SELECT * FROM users WHERE id = 1
+2026-03-08 14:45:12    12 Query     UPDATE users SET name = 'John' WHERE id = 1
+2026-03-08 14:45:13    12 Quit
+```
+
+**When to check**:
+- Debugging query issues
+- Performance analysis
+- Understanding what queries Laravel/Symfony is running
+
+<Warning>
+  The general log can grow very large in active development. Consider disabling it if performance becomes an issue.
+</Warning>
+
+### MariaDB Slow Query Log
+
+**Location**: `logs/mariadb/mariadb.slow.log`
+
+**Purpose**: Queries that take longer than the configured threshold (slow query log is enabled by default).
+
+**What it contains**:
+```log
+# Time: 2026-03-08T14:50:15.123456Z
+# User@Host: root[root] @ localhost []
+# Query_time: 5.234567  Lock_time: 0.000123  Rows_sent: 1000  Rows_examined: 100000
+SELECT * FROM large_table WHERE unindexed_column LIKE '%search%';
+```
+
+**When to check**:
+- Site performance issues
+- Identifying unoptimized queries
+- Database tuning
+
+### Viewing MariaDB Logs in Envloom
+
+1. Open **Logs** page
+2. Select **MySQL** tab (MariaDB logs)
+3. View error, general, or slow query logs
+
+## Log Configuration
+
+### PHP Logging Configuration
+
+PHP logs are automatically configured when PHP is installed. The configuration is injected into each version's `php.ini`:
+
+```ini
+; --- Envloom runtime logging ---
+log_errors = On
+error_log = "/path/to/envloom/logs/php/php-8_3.error.log"
+; --- /Envloom runtime logging ---
+```
+
+**Customize logging** in `config/php.ini` (base template) or `config/php/{version}.ini` (version-specific overrides).
+
+### MariaDB Logging Configuration
+
+MariaDB logs are configured in `config/mariadb/my.cnf`:
+
+```ini
+[mariadb]
+log_error=/path/to/envloom/logs/mariadb/mariadb.error.log
+general_log=1
+general_log_file=/path/to/envloom/logs/mariadb/mariadb.general.log
+slow_query_log=1
+slow_query_log_file=/path/to/envloom/logs/mariadb/mariadb.slow.log
+```
+
+**Disable general log** (for performance) by editing `my.cnf`:
+```ini
+general_log=0
+```
+
+### Nginx Logging Configuration
+
+Nginx logs are automatically configured by Envloom when sites are created. Configuration is in:
+- Global: `bin/nginx/current/conf/nginx.conf`
+- Per-site: `sites/{domain}.conf`
+
+## Accessing Logs Quickly
+
+### From Envloom UI
+
+1. **Logs Page**: Navigate to **Logs** in the sidebar
+2. **Auto-refresh**: Click refresh button to reload logs
+3. **Syntax Highlighting**: Logs are displayed with color-coded highlighting using `@melloware/react-logviewer`
+
+### From System Tray
+
+1. Right-click Envloom tray icon
+2. **PHP** submenu > **Logs**
+3. **Nginx** submenu > **Access Log** or **Error Log**
+
+### From File Explorer
+
+<Steps>
+  <Step title="Locate Envloom Directory">
+    By default, Envloom stores logs relative to the executable.
+    
+    **Development**: `src-tauri/logs/`
+    
+    **Production**: `{Envloom Directory}/logs/`
+  </Step>
+  
+  <Step title="Navigate to Log Type">
+    Choose the appropriate subdirectory (php, nginx, mariadb).
+  </Step>
+  
+  <Step title="Open Log File">
+    Use your favorite text editor or log viewer. Recommended tools:
+    - Notepad++
+    - VS Code
+    - Tail for Windows
+    - BareTail
+  </Step>
+</Steps>
+
+## Log Rotation and Maintenance
+
+<Warning>
+  Envloom does not automatically rotate logs. Large log files can impact performance.
+</Warning>
+
+**Manual log cleanup**:
+```powershell
+# Navigate to logs directory
+cd C:\Path\To\Envloom\logs
+
+# Clear all logs
+Get-ChildItem -Recurse -Filter *.log | Clear-Content
+
+# Or delete and recreate
+Get-ChildItem -Recurse -Filter *.log | Remove-Item
+```
+
+**Recommended**: Set up Windows Task Scheduler to periodically clear old logs.
+
+## Next Steps
+
+- Review [Common Issues](/troubleshooting/common-issues) for solutions to frequent problems
+- Learn [Advanced Debugging](/troubleshooting/debugging) techniques for complex issues

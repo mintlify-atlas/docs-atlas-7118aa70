@@ -1,0 +1,217 @@
+---
+title: "Global Settings"
+description: "Configure Envloom's global behavior including auto-start, auto-update, and Windows startup integration"
+icon: "gear"
+---
+
+## Overview
+
+Envloom stores global settings in `~/.envloom/config.json`. These settings control application behavior, service management, and system integration. All settings can be modified through the desktop UI's Settings page or by directly editing the configuration file.
+
+<Note>
+  Changes to global settings take effect immediately and persist across application restarts.
+</Note>
+
+## Configuration File Location
+
+The global configuration file is stored at:
+
+```plaintext
+%USERPROFILE%\.envloom\config.json
+```
+
+On a typical Windows installation, this resolves to:
+
+```plaintext
+C:\Users\YourUsername\.envloom\config.json
+```
+
+## Available Settings
+
+### Auto-Start Services
+
+<ParamField path="autoStartServices" type="boolean" default="true">
+  Controls whether PHP-FPM, Nginx, and MariaDB services start automatically when Envloom launches.
+
+  When enabled, all installed and configured services will start in the background on application launch, allowing immediate access to your local sites.
+
+  **UI Location**: Settings > Auto-start services on app launch
+</ParamField>
+
+<CodeGroup>
+```json Enabled (Default)
+{
+  "autoStartServices": true
+}
+```
+
+```json Disabled
+{
+  "autoStartServices": false
+}
+```
+</CodeGroup>
+
+<Warning>
+  If you disable auto-start services, you'll need to manually start services from the dashboard or use the "Start all" button before accessing your sites.
+</Warning>
+
+### Auto-Update
+
+<ParamField path="autoUpdate" type="boolean" default="true">
+  Enables automatic hourly checks for runtime updates (PHP, Node.js, MariaDB).
+
+  When enabled, Envloom checks for new runtime versions every hour and displays an **Update** button in the UI when newer versions are available. The actual update is never performed automatically—you always control when to update.
+
+  **UI Location**: Settings > Check for updates hourly
+</ParamField>
+
+<CodeGroup>
+```json Enabled (Default)
+{
+  "autoUpdate": true
+}
+```
+
+```json Disabled
+{
+  "autoUpdate": false
+}
+```
+</CodeGroup>
+
+<Tip>
+  Disabling auto-update reduces background network activity but means you'll need to manually check for runtime updates.
+</Tip>
+
+### Start with Windows
+
+<ParamField path="startWithWindows" type="boolean" default="false">
+  Configures Envloom to launch automatically when Windows starts.
+
+  When enabled, Envloom creates a registry entry in `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` to start the application at login.
+
+  **UI Location**: Settings > Start with Windows
+</ParamField>
+
+<CodeGroup>
+```json Enabled
+{
+  "startWithWindows": true
+}
+```
+
+```json Disabled (Default)
+{
+  "startWithWindows": false
+}
+```
+</CodeGroup>
+
+<Note>
+  This setting requires elevation (UAC) to modify the Windows registry. You'll be prompted for administrator access when toggling this option.
+</Note>
+
+### Start Minimized
+
+<ParamField path="startMinimized" type="boolean" default="false">
+  Controls whether Envloom starts in the system tray instead of showing the main window.
+
+  When enabled and combined with **Start with Windows**, Envloom launches silently to the system tray, keeping services running in the background without showing the UI.
+
+  **UI Location**: Settings > Start minimized to tray
+</ParamField>
+
+<CodeGroup>
+```json Enabled
+{
+  "startMinimized": true
+}
+```
+
+```json Disabled (Default)
+{
+  "startMinimized": false
+}
+```
+</CodeGroup>
+
+<Tip>
+  Combine `startWithWindows: true` and `startMinimized: true` for a seamless background development environment that starts automatically and stays out of your way.
+</Tip>
+
+## Complete Configuration Example
+
+```json ~/.envloom/config.json
+{
+  "autoStartServices": true,
+  "autoUpdate": true,
+  "startWithWindows": false,
+  "startMinimized": false
+}
+```
+
+## Legacy Compatibility
+
+<Accordion title="autoStart (Legacy)" icon="clock-rotate-left">
+  Older versions of Envloom used `autoStart` instead of `autoStartServices`. The configuration system maintains backward compatibility:
+
+  ```json
+  {
+    "autoStart": true  // Still works, mapped to autoStartServices
+  }
+  ```
+
+  When Envloom loads a configuration with the legacy `autoStart` key, it automatically migrates to `autoStartServices`. Future saves will use the new key name.
+</Accordion>
+
+## Managing Settings via UI
+
+All global settings can be managed through the desktop application:
+
+1. Launch Envloom
+2. Navigate to **Settings** in the sidebar
+3. Toggle the desired options
+4. Changes save automatically
+
+<img
+  src="/images/settings-page.png"
+  alt="Settings page showing all global configuration options"
+/>
+
+## Managing Settings via CLI
+
+While the CLI doesn't currently expose a dedicated settings command, you can directly edit the configuration file:
+
+```bash
+# Open config in your editor
+notepad %USERPROFILE%\.envloom\config.json
+```
+
+After editing, restart Envloom for changes to take effect.
+
+## Accessing Settings in Code
+
+For developers extending Envloom, settings are exposed via the `AppSettings` struct:
+
+```rust src-tauri/src/domain/models.rs
+pub struct AppSettings {
+    pub auto_start_services: bool,  // Renamed from autoStart
+    pub auto_update: bool,
+    pub start_with_windows: bool,
+    pub start_minimized: bool,
+}
+```
+
+Settings are loaded at application startup and persisted to `~/.envloom/config.json` via the `infrastructure/persistence.rs` module.
+
+## Related Configuration
+
+<CardGroup cols={2}>
+  <Card title="File Paths" icon="folder" href="/configuration/paths">
+    Learn about Envloom's file structure and important directories
+  </Card>
+  <Card title="Per-Site Config" icon="file-code" href="/configuration/per-site-config">
+    Configure runtime versions and settings per individual site
+  </Card>
+</CardGroup>

@@ -1,0 +1,308 @@
+---
+title: Common Issues
+description: Solutions to frequently encountered problems in Envloom
+---
+
+This guide covers the most common issues you may encounter while using Envloom and their solutions.
+
+## Services Not Starting
+
+### PHP-FPM Not Starting
+
+<Accordion title="Port Already in Use">
+  **Problem**: PHP-FPM fails to start because the port is already in use.
+
+  **Symptoms**:
+  - PHP service shows as stopped in the dashboard
+  - Log shows "failed to bind on 127.0.0.1:9000" or similar port number
+
+  **Solution**:
+  ```powershell
+  # Check what's using the port
+  netstat -ano | findstr :9000
+  
+  # Stop the conflicting process
+  taskkill /PID <process_id> /F
+  ```
+
+  Alternatively, change the PHP base port in your PHP configuration:
+  1. Go to **Runtime > PHP**
+  2. Modify the base port setting
+  3. Restart PHP-FPM
+</Accordion>
+
+<Accordion title="PHP-CGI Process Won't Stop">
+  **Problem**: Old PHP-CGI processes remain running and prevent new ones from starting.
+
+  **Symptoms**:
+  - Port conflicts even after stopping services
+  - Multiple `php-cgi.exe` processes in Task Manager
+
+  **Solution**:
+  ```cmd
+  # Force kill all PHP-CGI processes
+  taskkill /IM php-cgi.exe /F
+  ```
+
+  Then restart PHP-FPM from the Envloom dashboard.
+</Accordion>
+
+### MariaDB Not Starting
+
+<Accordion title="MariaDB Fails to Initialize">
+  **Problem**: MariaDB fails during first-time initialization.
+
+  **Symptoms**:
+  - MariaDB status shows as stopped
+  - Error logs mention initialization failure
+
+  **Solution**:
+  1. Check the MariaDB error log at: `logs/mariadb/mariadb.error.log`
+  2. Ensure the data directory exists and has proper permissions
+  3. Try reinitializing by deleting the data directory and restarting
+
+  <Warning>
+    Deleting the data directory will remove all databases. Only do this on a fresh installation.
+  </Warning>
+</Accordion>
+
+<Accordion title="Port 3306 Already in Use">
+  **Problem**: Another MySQL/MariaDB instance is using port 3306.
+
+  **Solution**:
+  ```powershell
+  # Check what's using port 3306
+  netstat -ano | findstr :3306
+  ```
+
+  Change MariaDB port:
+  1. Go to **Runtime > MariaDB**
+  2. Update the port setting (e.g., 3307)
+  3. Restart MariaDB
+</Accordion>
+
+### Nginx Not Starting
+
+<Accordion title="Port 80 or 443 Conflict">
+  **Problem**: Nginx cannot bind to port 80 or 443.
+
+  **Symptoms**:
+  - Nginx shows as stopped
+  - Error log shows "bind() to 0.0.0.0:80 failed"
+
+  **Solution**:
+  ```powershell
+  # Find what's using port 80
+  netstat -ano | findstr :80
+  
+  # Common culprits: IIS, Apache, other web servers
+  # Stop IIS if running:
+  net stop w3svc
+  ```
+
+  <Note>
+    Envloom requires ports 80 and 443 for local development. Ensure no other web servers are running.
+  </Note>
+</Accordion>
+
+## Permission Issues
+
+### Hosts File Update Failed
+
+<Accordion title="UAC Elevation Required">
+  **Problem**: Envloom cannot update the Windows hosts file automatically.
+
+  **Symptoms**:
+  - Error message: "UAC may have been denied"
+  - Sites don't resolve to 127.0.0.1
+
+  **Solution**:
+  Envloom will prompt for UAC elevation when needed. Make sure to:
+  1. Click "Yes" when UAC prompts appear
+  2. If UAC was denied, manually run Envloom as Administrator once to update hosts
+  3. After hosts are configured, you can run Envloom normally
+
+  **Manual hosts file edit** (if needed):
+  ```text
+  # Open as Administrator: C:\Windows\System32\drivers\etc\hosts
+  # Add your domains:
+  127.0.0.1 mysite.test
+  127.0.0.1 another.test
+  ```
+</Accordion>
+
+### NVM Installation Failed
+
+<Accordion title="UAC Denied During NVM Setup">
+  **Problem**: NVM installation fails due to UAC denial.
+
+  **Symptoms**:
+  - Error: "UAC may have been denied"
+  - Node.js installation doesn't work
+
+  **Solution**:
+  1. Close Envloom
+  2. Run Envloom as Administrator
+  3. Go to **Runtime > Node.js**
+  4. Install a Node.js version
+  5. After NVM is configured, you can run Envloom normally
+</Accordion>
+
+## SSL Certificate Issues
+
+<Accordion title="SSL Certificate Not Trusted">
+  **Problem**: Browser shows SSL warnings for `.test` domains.
+
+  **Symptoms**:
+  - "Your connection is not private" error
+  - NET::ERR_CERT_AUTHORITY_INVALID
+
+  **Solution**:
+  Envloom automatically generates a local Certificate Authority (CA) and certificates per site.
+
+  Trust the CA certificate:
+  1. Navigate to `sites/ca/` directory
+  2. Double-click `ca.crt`
+  3. Click "Install Certificate"
+  4. Choose "Current User" > "Place all certificates in the following store"
+  5. Select "Trusted Root Certification Authorities"
+  6. Complete the wizard
+
+  <Note>
+    You only need to trust the CA certificate once. All site certificates will then be trusted automatically.
+  </Note>
+</Accordion>
+
+<Accordion title="Regenerate Site Certificate">
+  **Problem**: Site certificate is corrupted or expired.
+
+  **Solution**:
+  1. Go to **Sites** page
+  2. Select the problematic site
+  3. Toggle SSL off, then on again
+  4. Envloom will regenerate the certificate
+</Accordion>
+
+## Site Provisioning Issues
+
+<Accordion title="Composer Installation Failed">
+  **Problem**: Laravel site creation fails during Composer install.
+
+  **Symptoms**:
+  - Error during `composer install` or `composer create-project`
+  - Timeout errors
+
+  **Solution**:
+  1. Ensure PHP is installed and active
+  2. Check your internet connection
+  3. Try creating the site again
+  4. If it fails repeatedly, check `logs/runtime.log` for details
+</Accordion>
+
+<Accordion title="NPM Install Fails with Peer Dependency Errors">
+  **Problem**: Site creation fails during `npm install`.
+
+  **Solution**:
+  Envloom automatically retries with `--legacy-peer-deps` if the first attempt fails. If it still fails:
+
+  1. Navigate to the site directory
+  2. Manually run:
+  ```bash
+  npm install --legacy-peer-deps
+  npm run build
+  ```
+</Accordion>
+
+## Path and Directory Issues
+
+<Accordion title="Site Directory Not Empty">
+  **Problem**: Cannot create new site because directory exists.
+
+  **Solution**:
+  - Choose a different directory
+  - Or use "Link Existing Site" if you want to link an existing project
+  - Envloom won't overwrite existing directories for safety
+</Accordion>
+
+<Accordion title="Long Path Names on Windows">
+  **Problem**: Errors related to path length (260 character limit).
+
+  **Solution**:
+  Enable long path support in Windows:
+  ```powershell
+  # Run as Administrator
+  New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+    -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+  ```
+
+  Then restart your computer.
+</Accordion>
+
+## Database Connection Issues
+
+<Accordion title="Laravel Cannot Connect to Database">
+  **Problem**: Site shows database connection error.
+
+  **Symptoms**:
+  - "SQLSTATE[HY000] [2002] Connection refused"
+  - "Access denied for user 'root'"
+
+  **Solution**:
+  Check your `.env` file:
+  ```env
+  DB_CONNECTION=mysql
+  DB_HOST=127.0.0.1
+  DB_PORT=3306
+  DB_DATABASE=your_database
+  DB_USERNAME=root
+  DB_PASSWORD=your_root_password
+  ```
+
+  Ensure:
+  1. MariaDB is running (check dashboard)
+  2. Port matches your MariaDB configuration
+  3. Password matches the one set in Envloom
+  4. Database exists (create with `mysql -u root -p`)
+</Accordion>
+
+## General Troubleshooting Steps
+
+<Steps>
+  <Step title="Check Service Status">
+    Open Envloom dashboard and verify all services show as "running" with green indicators.
+  </Step>
+  
+  <Step title="Review Logs">
+    Check the relevant logs in the **Logs** page:
+    - Runtime logs for general Envloom operations
+    - PHP logs for PHP errors
+    - Nginx logs for web server issues
+    - MariaDB logs for database problems
+  </Step>
+  
+  <Step title="Restart Services">
+    Try stopping and starting all services:
+    1. Click "Stop All" in the dashboard
+    2. Wait 5 seconds
+    3. Click "Start All"
+  </Step>
+  
+  <Step title="Check for Updates">
+    Ensure you're running the latest versions:
+    - Check for Envloom updates
+    - Update runtimes (PHP, Node.js, MariaDB) if newer versions are available
+  </Step>
+  
+  <Step title="Restart Envloom">
+    Close and reopen the Envloom application. Services should auto-start if enabled in settings.
+  </Step>
+</Steps>
+
+## Getting More Help
+
+If you're still experiencing issues:
+
+1. Check the [Logs](/troubleshooting/logs) documentation to understand log locations
+2. Review [Debugging](/troubleshooting/debugging) for advanced diagnostic techniques
+3. Search for similar issues in the Envloom issue tracker
+4. Report the issue with relevant log excerpts

@@ -1,0 +1,380 @@
+---
+title: "Multi-Version Runtime Management"
+description: "Manage multiple versions of PHP, Node.js, MariaDB, and Nginx with versioned installations and easy switching"
+---
+
+## Overview
+
+Envloom provides comprehensive runtime management for your local development stack. Install and manage multiple versions of PHP, Node.js, MariaDB, and Nginx simultaneously, with the ability to switch between versions instantly.
+
+<Note>
+  All runtimes are installed locally within Envloom's `bin` directory, keeping your system clean and isolated from global installations.
+</Note>
+
+## Supported Runtimes
+
+<CardGroup cols={2}>
+  <Card title="PHP" icon="php">
+    Thread-safe x64 builds from windows.php.net with per-version FPM configuration
+  </Card>
+  <Card title="Node.js" icon="node">
+    Managed via nvm-windows with automatic version switching
+  </Card>
+  <Card title="MariaDB" icon="database">
+    Official MariaDB releases with local data directory
+  </Card>
+  <Card title="Nginx" icon="server">
+    Latest stable releases from GitHub with auto-configuration
+  </Card>
+</CardGroup>
+
+## PHP Runtime Management
+
+### Version Installation
+
+PHP versions are organized by **major.minor lines** (e.g., 8.3, 8.2, 8.1). Envloom automatically fetches the latest builds from the official PHP for Windows releases.
+
+<Steps>
+  <Step title="Browse Available Versions">
+    Navigate to **Runtime > PHP** to see available major versions (8.3, 8.2, 8.1, 8.0, etc.)
+  </Step>
+  
+  <Step title="Install a Version">
+    Click **Install** next to any PHP line to download and configure the latest build for that version
+  </Step>
+  
+  <Step title="Set as Current">
+    Use the **Set as Current** button to make a version the global default via junction link
+  </Step>
+</Steps>
+
+### Version-Specific Configuration
+
+Each PHP version gets its own `php.ini` with:
+
+- **Base template**: Shared configuration in `config/php/php.ini`
+- **Version overrides**: Per-version settings in `config/php/{major.minor}.ini`
+- **Managed values**: Memory limit and upload size controlled via UI
+- **Required extensions**: Automatically enabled (PDO, OpenSSL, cURL, mbstring, zip, etc.)
+
+```ini php.ini structure
+; --- Envloom required extensions ---
+extension=pdo_sqlite
+extension=sqlite3
+extension=pdo_mysql
+extension=openssl
+extension=curl
+; --- /Envloom required extensions ---
+
+; --- Envloom managed values ---
+upload_max_filesize = 64M
+post_max_size = 64M
+memory_limit = 256M
+; --- /Envloom managed values ---
+```
+
+### PHP-FPM Service
+
+Envloom runs `php-cgi.exe` as FastCGI Process Manager for each installed PHP version:
+
+- **Base port**: 9000 (configurable)
+- **Port calculation**: `base_port + (major * 10 + minor)`
+  - PHP 8.3 → port 9083
+  - PHP 8.2 → port 9082
+  - PHP 8.1 → port 9081
+
+<Note>
+  All installed PHP versions run simultaneously, allowing per-site version selection.
+</Note>
+
+### CLI Shims
+
+Envloom creates command-line shims for easy access:
+
+```bash Available PHP commands
+# Global current version
+php --version
+
+# Version-specific commands
+php83 --version
+php82 artisan migrate
+php81 composer install
+```
+
+### Update Management
+
+Envloom checks for updates hourly (configurable in Settings):
+
+- **Auto-check**: Background update detection every hour
+- **Manual update**: Click **Update** button when newer build is available
+- **Cache**: Release information cached for 1 hour
+
+## Node.js Runtime Management
+
+### NVM Integration
+
+Node.js is managed through **nvm-windows** (Node Version Manager):
+
+- **Local installation**: Envloom installs nvm-noinstall.zip to `bin/nvm`
+- **Version storage**: Node versions in `bin/node/{version}`
+- **Current symlink**: Active version at `bin/node/current`
+
+### Installing Node Versions
+
+<Tabs>
+  <Tab title="Desktop UI">
+    1. Open **Runtime > Node**
+    2. Browse available major versions (22, 20, 18, 16, etc.)
+    3. Click **Install** to download the latest version for that major
+    4. Use **Set as Current** to switch the active version
+  </Tab>
+  
+  <Tab title="CLI">
+    ```bash
+    # Install specific major version
+    loom node 22
+    
+    # Install and switch to specific version
+    loom node 20.11.0
+    
+    # List installed versions
+    loom list node
+    ```
+  </Tab>
+</Tabs>
+
+### Version Switching Behavior
+
+<Warning>
+  Only the **first** Node.js installation automatically runs `nvm use`. Subsequent installations don't change the current version unless explicitly requested.
+</Warning>
+
+```bash Node.js version management
+# Check current version
+node --version
+
+# Available via PATH
+npm --version
+npx --version
+```
+
+## MariaDB Runtime Management
+
+### Version Management
+
+MariaDB is **not** auto-downloaded on first launch. You must manually install versions:
+
+<Steps>
+  <Step title="Select Major Version">
+    Navigate to **Runtime > MariaDB** and choose a major line (11.x, 10.x, etc.)
+  </Step>
+  
+  <Step title="Install">
+    Envloom downloads the latest Windows x64 ZIP from the official MariaDB downloads API
+  </Step>
+  
+  <Step title="Set Root Password">
+    A modal prompts for the root password before installation begins
+  </Step>
+  
+  <Step title="Initialization">
+    Envloom runs `mysql_install_db.exe` and configures the data directory
+  </Step>
+</Steps>
+
+### Configuration
+
+Each MariaDB version gets its own `my.ini` configuration:
+
+```ini MariaDB configuration
+[mariadb]
+port=3306
+bind-address=127.0.0.1
+log_error=logs/mariadb/mariadb.error.log
+general_log=1
+general_log_file=logs/mariadb/mariadb.general.log
+slow_query_log=1
+slow_query_log_file=logs/mariadb/mariadb.slow.log
+
+[client]
+user=root
+password=your_password
+```
+
+<Note>
+  Port and root password are configurable from **Runtime > MariaDB** settings.
+</Note>
+
+### Database Shims
+
+Envloom creates both MySQL-compatible and MariaDB-native shims:
+
+```bash Database CLI access
+# MariaDB commands
+mariadb -u root -p
+mariadb-admin status
+
+# MySQL-compatible aliases
+mysql -u root -p
+mysqladmin status
+```
+
+## Nginx Web Server
+
+### Installation
+
+Nginx is automatically downloaded during bootstrap:
+
+- **Source**: Latest stable release from nginx/nginx GitHub repository
+- **Location**: `bin/nginx/{version}`
+- **Current link**: `bin/nginx/current` junction points to active version
+
+### Auto-Configuration
+
+Envloom automatically configures Nginx for local development:
+
+1. **Global logs**: `logs/nginx/access.log` and `logs/nginx/error.log`
+2. **Site includes**: Automatic `include sites/*.conf;` directive
+3. **FastCGI setup**: Pre-configured PHP-FPM integration
+
+```nginx nginx.conf modifications
+http {
+    error_log     logs/nginx/error.log;
+    access_log    logs/nginx/access.log;
+    include       sites/*.conf;
+    # ... rest of config
+}
+```
+
+### Service Management
+
+Nginx lifecycle is managed automatically:
+
+- **Auto-start**: Launches on app startup (configurable)
+- **Config test**: Runs `nginx -t` before starting
+- **Auto-reload**: Reloads when site configs change
+- **Auto-stop**: Graceful shutdown when Envloom closes
+
+<Warning>
+  If Nginx fails to start, check `logs/nginx/error.log` for configuration errors. The UI will display the last 80 lines of the error log.
+</Warning>
+
+## Runtime Shims & PATH Management
+
+Envloom manages your Windows `PATH` environment variable with a single entry pointing to `bin`:
+
+### Shim System
+
+**Current version shims** (point to junction links):
+```cmd
+bin/php.cmd → bin/php/current/php.exe
+bin/mysql.cmd → bin/mariadb/current/bin/mysql.exe
+bin/nginx.cmd → bin/nginx/current/nginx.exe
+```
+
+**Versioned shims** (direct version access):
+```cmd
+bin/php83.cmd → bin/php/8.3/php.exe
+bin/php82.cmd → bin/php/8.2/php.exe
+bin/mysql114.cmd → bin/mariadb/11.4/bin/mysql.exe
+```
+
+**Utility shims**:
+```cmd
+bin/composer.cmd → runs php bin/composer/composer.phar
+bin/loom.cmd → CLI interface to Envloom
+```
+
+### Clean PATH
+
+<Note>
+  Envloom automatically removes legacy entries when switching versions, keeping your PATH clean with only one `bin` directory.
+</Note>
+
+Removed legacy paths:
+- `bin/php/current`
+- `bin/nginx/current`
+- `bin/mariadb/current/bin`
+- `bin/shims` (old shim location)
+- `bin/composer`
+
+## Update Checks
+
+Background update detection runs every hour (when `autoUpdate` is enabled):
+
+<Steps>
+  <Step title="Cache Check">
+    Envloom checks if the release cache is older than 1 hour
+  </Step>
+  
+  <Step title="Fetch Latest">
+    Downloads release metadata from:
+    - PHP: `windows.php.net/downloads/releases/releases.json`
+    - MariaDB: `downloads.mariadb.org/rest-api/mariadb/`
+    - Nginx: `api.github.com/repos/nginx/nginx/releases`
+  </Step>
+  
+  <Step title="Compare Versions">
+    Compares installed builds with latest available versions
+  </Step>
+  
+  <Step title="UI Notification">
+    Shows **Update** button on runtime cards when newer version exists
+  </Step>
+</Steps>
+
+<Warning>
+  Update checks require internet connectivity. If the fetch fails, Envloom uses the cached release data.
+</Warning>
+
+## CLI Commands
+
+```bash Runtime management from CLI
+# List installed versions
+loom list php
+loom list node
+
+# Check current versions
+loom current
+
+# Switch global version
+loom php 8.3
+loom node 22
+
+# Install new version (UI only for now)
+# Use the desktop app to install new versions
+```
+
+## Troubleshooting
+
+### PHP-FPM Not Starting
+
+1. Check if port is already in use: `netstat -ano | findstr :9083`
+2. Review PHP error log: `logs/php/php-8_3.error.log`
+3. Verify `php-cgi.exe` exists in version directory
+4. Check `php.ini` syntax
+
+### MariaDB Won't Initialize
+
+1. Ensure root password was set during installation
+2. Check `logs/mariadb/mariadb.error.log`
+3. Verify `mysql_install_db.exe` or `mariadb-install-db.exe` exists
+4. Port 3306 must be available
+
+### Nginx Config Test Fails
+
+1. Run `nginx -t` manually from `bin/nginx/current`
+2. Check syntax in `sites/*.conf` files
+3. Verify all referenced certificate files exist
+4. Ensure port 80/443 are available
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Site Management" href="/features/sites" icon="globe">
+    Learn how sites use runtime versions
+  </Card>
+  <Card title="Services" href="/features/services" icon="play">
+    Control service lifecycle and status
+  </Card>
+</CardGroup>

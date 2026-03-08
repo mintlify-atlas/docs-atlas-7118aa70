@@ -1,0 +1,574 @@
+---
+title: 'MariaDB Runtime'
+description: 'Manage MariaDB database server installations and configuration in Envloom'
+icon: 'database'
+---
+
+## Overview
+
+Envloom provides MariaDB as the primary database runtime with support for multiple versions, automatic initialization, root password management, and comprehensive logging. Unlike PHP and Node, MariaDB is **not** installed automatically - you must manually install it from the UI.
+
+## Version Management
+
+### Installing MariaDB
+
+MariaDB versions are downloaded from the official MariaDB releases API:
+
+<Steps>
+  <Step title="Navigate to MariaDB Page">
+    Open the MariaDB section in Envloom UI
+  </Step>
+  
+  <Step title="Set Root Password">
+    Before installation, you'll be prompted to set a root password in a modal dialog
+  </Step>
+  
+  <Step title="Select Version">
+    Choose a major version line (e.g., 11.4, 11.3, 10.11) and click Install
+  </Step>
+  
+  <Step title="Automatic Setup">
+    Envloom will:
+    - Download the latest Windows x64 ZIP for that major version
+    - Extract to `bin/mariadb/<version>/`
+    - Generate `my.ini` configuration
+    - Initialize data directory with `mysql_install_db.exe`
+    - Set root password using `mariadb-admin.exe`
+    - Start the MariaDB service
+  </Step>
+</Steps>
+
+<Note>
+  MariaDB downloads are large (100-300MB) and may take several minutes. Progress is shown during installation.
+</Note>
+
+### Version Detection
+
+Envloom queries the MariaDB API for available versions:
+
+```rust
+const MARIADB_RELEASES_URL: &str = 
+    "https://downloads.mariadb.org/rest-api/mariadb/";
+
+// Fetches major version catalog: 11.4, 11.3, 10.11, etc.
+// Filters for Windows x64 ZIP releases
+// Caches results for 1 hour
+```
+
+Installed versions are detected by scanning `bin/mariadb/` for directories containing `bin/mariadbd.exe`.
+
+### Setting Current Version
+
+Only one MariaDB version can be active at a time:
+
+```bash
+# Via CLI
+loom mariadb 11.4
+
+# Via UI
+# Select version and click "Set as Current"
+```
+
+Envloom creates a junction at `bin/mariadb/current` pointing to the active version.
+
+### Uninstalling Versions
+
+<Warning>
+  Uninstalling MariaDB removes the entire version directory including data files. Backup your databases first!
+</Warning>
+
+```bash
+# Via UI only
+# Click uninstall button next to installed version
+
+# Manual backup before uninstall
+mysqldump --all-databases > backup.sql
+```
+
+## Configuration
+
+### Port Configuration
+
+Default port is `3306`. Change it in MariaDB settings:
+
+```typescript
+await setMariaDbConfig(3307, "root_password");
+```
+
+Port changes apply to all versions and require a service restart.
+
+### Root Password Management
+
+The root password is stored in two places:
+
+1. **Config storage** - `config.json` (for Envloom reference)
+2. **Client config** - `my.ini` files under `[client]` section
+
+<Tabs>
+  <Tab title="Set During Install">
+    Root password is required before installing the first MariaDB version. A modal dialog prompts for the password.
+  </Tab>
+  
+  <Tab title="Change After Install">
+    Update root password from the MariaDB settings page:
+    
+    ```typescript
+    await setMariaDbConfig(3306, "new_password");
+    ```
+    
+    This updates:
+    - The running server (if active) via `mariadb-admin`
+    - All `my.ini` files for installed versions
+    - Config storage for future reference
+  </Tab>
+</Tabs>
+
+### my.ini Configuration
+
+Each MariaDB version gets its own `my.ini` generated from a template:
+
+```ini
+# Envloom MariaDB config
+[mariadb]
+port=3306
+bind-address=127.0.0.1
+log_error=C:/path/to/envloom/logs/mariadb/mariadb.error.log
+general_log=1
+general_log_file=C:/path/to/envloom/logs/mariadb/mariadb.general.log
+slow_query_log=1
+slow_query_log_file=C:/path/to/envloom/logs/mariadb/mariadb.slow.log
+
+[client]
+user=root
+password=your_root_password
+```
+
+<Note>
+  The `[client]` section allows tools like `mysql` and `mysqldump` to connect without prompting for password.
+</Note>
+
+### Template System
+
+Configuration templates are stored in `config/mariadb/my.cnf`:
+
+```rust
+fn write_mariadb_template(
+    template_dir: &Path, 
+    logs_dir: &Path, 
+    config: &MariaDbConfig
+) -> Result<(), String>
+```
+
+Changes to the template propagate to all installed versions on next apply.
+
+## Database Initialization
+
+MariaDB requires initialization before first use:
+
+```rust
+// Initialize data directory
+mysql_install_db.exe --datadir=data
+
+// Or fallback method
+mariadbd.exe --initialize-insecure --datadir=data
+```
+
+Envloom handles this automatically during installation.
+
+### Data Directory
+
+Each MariaDB version stores data in its own directory:
+
+```
+bin/mariadb/11.4/
+├── bin/
+│   ├── mariadbd.exe
+│   ├── mariadb.exe (or mysql.exe)
+│   ├── mariadb-admin.exe (or mysqladmin.exe)
+│   └── mysql_install_db.exe
+├── data/
+│   ├── mysql/
+│   ├── performance_schema/
+│   └── [your databases]
+├── my.ini
+└── ...
+```
+
+## Service Management
+
+### Starting MariaDB
+
+MariaDB starts automatically on app launch if `autoStartServices` is enabled:
+
+```powershell
+# PowerShell start script
+Start-Process -WindowStyle Hidden `
+  -FilePath "bin/mariadb/current/bin/mariadbd.exe" `
+  -ArgumentList "--defaults-file=bin/mariadb/current/my.ini"
+```
+
+Verify with:
+
+```bash
+# Check if running
+netstat -ano | findstr :3306
+
+# Or via Envloom
+loom current  # Shows service status
+```
+
+### Stopping MariaDB
+
+MariaDB stops automatically on app exit. Manual stop:
+
+```powershell
+# Graceful shutdown via admin tool
+mariadb-admin shutdown
+
+# Or kill processes
+Get-Process | Where-Object { $_.Name -like "mariadbd" } | Stop-Process -Force
+```
+
+<Note>
+  Envloom uses a reinforced stop procedure: graceful shutdown, then kill by runtime path, then port verification.
+</Note>
+
+### Auto-start Configuration
+
+```typescript
+// Enable/disable auto-start
+const settings = await loadAppSettings();
+settings.autoStartServices = true;
+await saveAppSettings(settings);
+```
+
+When disabled, you must manually start services from the Dashboard.
+
+## Logging
+
+MariaDB generates three types of logs:
+
+### Error Log
+
+```bash
+logs/mariadb/mariadb.error.log
+```
+
+Contains startup/shutdown messages and errors. Check this first when troubleshooting.
+
+### General Log
+
+```bash
+logs/mariadb/mariadb.general.log
+```
+
+Logs all client connections and SQL queries. Useful for debugging but can grow large.
+
+<Warning>
+  General log can impact performance and disk space in production. Disable via `my.ini` if not needed:
+  
+  ```ini
+  general_log=0
+  ```
+</Warning>
+
+### Slow Query Log
+
+```bash
+logs/mariadb/mariadb.slow.log
+```
+
+Tracks queries that exceed the slow query threshold (default: 10 seconds).
+
+### Viewing Logs
+
+<Tabs>
+  <Tab title="UI">
+    Navigate to Logs page > MySQL tab to view all MariaDB logs
+  </Tab>
+  
+  <Tab title="CLI">
+    ```bash
+    # Via loom (future feature)
+    loom logs mariadb
+    
+    # Manual
+    type logs\mariadb\mariadb.error.log
+    ```
+  </Tab>
+  
+  <Tab title="Systray">
+    Right-click Envloom icon > MySQL > View Logs
+  </Tab>
+</Tabs>
+
+## CLI Shims
+
+Envloom creates shims for MariaDB command-line tools:
+
+### MySQL/MariaDB Client
+
+```bash
+# Connect to database
+mysql -u root -p
+
+# Or use mariadb directly
+mariadb -u root -p
+
+# Run query
+mysql -u root -p my_database -e "SELECT * FROM users"
+```
+
+<Note>
+  Some MariaDB builds include `mysql.exe`, others only `mariadb.exe`. Envloom shims handle both with fallback logic.
+</Note>
+
+### mysqladmin / mariadb-admin
+
+```bash
+# Check server status
+mysqladmin status
+
+# Create database
+mysqladmin create my_database
+
+# Change root password
+mysqladmin -u root -p password new_password
+```
+
+### Binary Fallback
+
+Shim generation handles missing binaries:
+
+```rust
+let candidates = vec!["mysql.exe", "mariadb.exe"];
+let exe_name = candidates
+    .into_iter()
+    .find(|candidate| bin_dir.join(candidate).exists());
+
+if let Some(exe) = exe_name {
+    create_shim("mysql.cmd", exe);
+}
+```
+
+## Database Operations
+
+### Creating Databases
+
+```bash
+# Via CLI
+mysql -u root -p -e "CREATE DATABASE my_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+# Or interactively
+mysql -u root -p
+CREATE DATABASE my_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE my_app;
+```
+
+### Laravel Integration
+
+Update `.env` in your Laravel site:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=my_app
+DB_USERNAME=root
+DB_PASSWORD=your_root_password
+```
+
+Run migrations:
+
+```bash
+php artisan migrate
+```
+
+### Backup and Restore
+
+<CodeGroup>
+```bash Backup
+# Single database
+mysqldump -u root -p my_database > backup.sql
+
+# All databases
+mysqldump -u root -p --all-databases > full_backup.sql
+
+# With structure only
+mysqldump -u root -p --no-data my_database > structure.sql
+```
+
+```bash Restore
+# Restore single database
+mysql -u root -p my_database < backup.sql
+
+# Restore all databases
+mysql -u root -p < full_backup.sql
+
+# Create and restore
+mysql -u root -p -e "CREATE DATABASE my_database"
+mysql -u root -p my_database < backup.sql
+```
+</CodeGroup>
+
+## API Reference
+
+```typescript
+// Get MariaDB catalog
+const catalog = await getMariaDbCatalog();
+console.log(catalog.port);          // 3306
+console.log(catalog.currentLine);   // "11.4"
+console.log(catalog.runtimes);      // List of versions
+
+// Install latest for major version
+await installLatestMariaDb("11.4");
+
+// Set current version
+await setMariaDbCurrentLine("11.4");
+
+// Update config
+await setMariaDbConfig(3307, "new_password");
+
+// Uninstall version
+await uninstallMariaDbLine("11.3");
+```
+
+### Type Definitions
+
+```typescript
+type MariaDbLineRuntime = {
+  line: string;                    // Major version ("11.4")
+  latestVersion: string | null;    // Latest available
+  installedVersions: string[];     // All installed builds
+};
+
+type MariaDbCatalogResponse = {
+  port: number;                    // Server port (3306)
+  rootPassword: string;            // Root password
+  currentLine: string | null;      // Active version
+  runtimes: MariaDbLineRuntime[];  // Version catalog
+};
+```
+
+## Troubleshooting
+
+### Server Won't Start
+
+Check error log first:
+
+```bash
+type logs\mariadb\mariadb.error.log | more
+```
+
+Common issues:
+
+<Accordion title="Port Already in Use">
+  ```bash
+  netstat -ano | findstr :3306
+  # Kill the process or change port in settings
+  ```
+</Accordion>
+
+<Accordion title="Data Directory Corruption">
+  ```bash
+  # Backup data
+  xcopy bin\mariadb\current\data data_backup /E /I
+  
+  # Reinitialize
+  cd bin\mariadb\current\bin
+  mysql_install_db.exe --datadir=../data
+  ```
+</Accordion>
+
+<Accordion title="Permission Errors">
+  Ensure data directory is writable:
+  ```bash
+  icacls bin\mariadb\current\data /grant %USERNAME%:F /T
+  ```
+</Accordion>
+
+### Connection Refused
+
+If `mysql -u root -p` fails with connection refused:
+
+1. Verify server is running:
+   ```bash
+   netstat -ano | findstr :3306
+   ```
+
+2. Check bind address in `my.ini`:
+   ```ini
+   bind-address=127.0.0.1  # Should allow localhost
+   ```
+
+3. Verify port matches:
+   ```bash
+   mysql -u root -p -h 127.0.0.1 -P 3306
+   ```
+
+### Authentication Errors
+
+If password doesn't work:
+
+1. Reset via Envloom UI (MariaDB settings)
+2. Or manually with `mariadb-admin`:
+   ```bash
+   # Stop MariaDB first
+   mariadb-admin -u root -p password new_password
+   ```
+
+3. Update `my.ini` `[client]` section to match
+
+### Slow Queries
+
+Optimize slow queries found in slow query log:
+
+```sql
+-- Analyze query
+EXPLAIN SELECT * FROM users WHERE email = 'test@example.com';
+
+-- Add index if needed
+ALTER TABLE users ADD INDEX idx_email (email);
+
+-- Check table health
+ANALYZE TABLE users;
+```
+
+## Best Practices
+
+### Version Selection
+
+- **11.4** - Latest stable (recommended for new projects)
+- **11.3** - LTS support until 2028
+- **10.11** - LTS support until 2028
+- **10.6** - Older LTS, use only if required
+
+### Security
+
+```sql
+-- Create app-specific user instead of using root
+CREATE USER 'myapp'@'localhost' IDENTIFIED BY 'secure_password';
+GRANT ALL PRIVILEGES ON myapp_db.* TO 'myapp'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+### Performance
+
+```ini
+# Add to my.ini for better performance
+[mariadb]
+innodb_buffer_pool_size=256M
+innodb_log_file_size=64M
+max_connections=50
+query_cache_size=16M
+```
+
+### Backups
+
+```bash
+# Schedule regular backups
+mysqldump -u root -p --all-databases | gzip > backup_$(date +%Y%m%d).sql.gz
+
+# Keep 7 days of backups
+forfiles /p "backups" /m backup_*.sql.gz /d -7 /c "cmd /c del @file"
+```

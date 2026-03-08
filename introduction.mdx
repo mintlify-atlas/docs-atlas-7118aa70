@@ -1,0 +1,97 @@
+---
+title: Introduction
+description: A local development stack manager for Windows with versioned runtimes, per-site configuration, and a desktop-first workflow.
+---
+
+# Welcome to Envloom
+
+Envloom is a **local development stack manager for Windows** designed to simplify your development workflow. It provides versioned runtime management for PHP, Node.js, MariaDB, and Nginx with per-site configuration, local SSL support, and both a desktop application and CLI interface.
+
+## What is Envloom?
+
+Envloom gives you complete control over your local development environment by managing multiple versions of essential runtimes and services. Whether you're working on a Laravel application that requires PHP 8.1, or a legacy project on PHP 7.4, Envloom lets you switch between versions seamlessly and configure each site independently.
+
+<CardGroup cols={2}>
+  <Card title="Version Management" icon="layer-group">
+    Install and manage multiple versions of PHP, Node.js, MariaDB, and Nginx side-by-side
+  </Card>
+  <Card title="Per-Site Config" icon="gear">
+    Each site can use its own PHP version and have independent SSL settings
+  </Card>
+  <Card title="Desktop + CLI" icon="terminal">
+    Control everything via an intuitive desktop app or powerful CLI commands
+  </Card>
+  <Card title="Local SSL" icon="lock">
+    Automatic local certificate authority and per-site HTTPS certificates
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Runtime Manager
+- **PHP**: Install multiple versions with thread-safe builds for Windows (x64), manage `php.ini` configurations per version, and automatic PHP-FPM port mapping
+- **Node.js**: Built-in NVM (Node Version Manager) with multi-version support
+- **MariaDB**: Full MariaDB runtime with root password configuration and data management
+- **Nginx**: Latest stable Nginx builds with automatic site configuration
+
+### Sites Management
+- **Link existing projects** to Envloom for immediate local hosting
+- **Create new Laravel sites** with optional starter kits (React, Vue, Svelte, Livewire)
+- **Per-site PHP version** selection
+- **Local SSL toggle** for individual sites
+- **Automatic hosts file management** with elevation helper
+- **Nginx configuration generation** for each site
+
+### Desktop Application
+- **Dashboard** with real-time service status
+- **Start all / Stop all** service controls
+- **Runtime pages** for managing PHP, Node, MariaDB, and Nginx versions
+- **Sites page** for creating and managing your local projects
+- **Logs viewer** with centralized logging (runtime, PHP, Nginx, MariaDB)
+- **Settings** for auto-start services, auto-update checks, start with Windows, and start minimized
+- **System tray** with quick actions, runtime switching, and site links
+
+### CLI Interface
+The `loom` CLI provides command-line access to core functionality:
+- `loom current` - Show current runtime versions
+- `loom list <runtime>` - List available versions
+- `loom link` - Link an existing project in the current directory
+- `loom unlink` - Unlink a site
+- `loom ssl on|off` - Toggle SSL for the current site
+- `loom php <version>` - Switch global PHP version
+- `loom node <version>` - Switch global Node.js version
+
+### Developer Experience
+- **Shims in `bin`**: Access `php`, `php85`, `mysql`, `nginx`, `composer`, and `loom` commands globally
+- **Automatic PATH management**: Single `bin` entry in your system PATH
+- **Auto-start services**: Optionally start PHP-FPM, Nginx, and MariaDB on app launch
+- **Update checking**: Background checks for new runtime versions
+- **Centralized logging**: All logs in one place with in-app viewer
+
+## Who is Envloom For?
+
+Envloom is perfect for:
+
+- **PHP developers** working on Laravel, Symfony, WordPress, or other PHP projects
+- **Full-stack developers** needing Node.js alongside PHP
+- **Teams** requiring consistent local development environments
+- **Freelancers** managing multiple client projects with different requirements
+- **Anyone** tired of complex Docker setups or manual runtime management
+
+<Note>
+Envloom is currently **Windows-only** and optimized for modern Windows 10/11 systems.
+</Note>
+
+## Why Envloom?
+
+Unlike XAMPP or WAMP that lock you into specific versions, or Docker that requires extensive configuration, Envloom provides:
+
+- **Native Windows performance** - No virtualization overhead
+- **Simple version switching** - Change PHP or Node versions with one click
+- **Automatic configuration** - Nginx configs and SSL certificates generated for you
+- **Desktop-first design** - Visual interface for common tasks, CLI for power users
+- **Per-project flexibility** - Each site can use different runtime versions
+
+## What's Next?
+
+Ready to get started? Follow our [Installation](/installation) guide to set up Envloom, then check out the [Quickstart](/quickstart) to create your first site.

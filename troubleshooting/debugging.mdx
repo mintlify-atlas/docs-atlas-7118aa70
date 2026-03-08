@@ -1,0 +1,628 @@
+---
+title: Advanced Debugging
+description: Advanced techniques and diagnostic commands for troubleshooting Envloom
+---
+
+This guide covers advanced debugging techniques for diagnosing complex issues with Envloom and your development environment.
+
+## Diagnostic Commands
+
+### Check Service Status
+
+Verify which services are running and on which ports.
+
+<CodeGroup>
+```powershell PHP-FPM Processes
+# List all PHP-CGI processes
+Get-Process -Name php-cgi -ErrorAction SilentlyContinue | Select-Object Id, Path, StartTime
+
+# Check specific port
+netstat -ano | findstr :9000
+```
+
+```powershell Nginx Status
+# Check if Nginx is running
+Get-Process -Name nginx -ErrorAction SilentlyContinue
+
+# Check port 80 and 443
+netstat -ano | findstr :80
+netstat -ano | findstr :443
+
+# Test Nginx configuration
+C:\Path\To\Envloom\bin\nginx\current\nginx.exe -t
+```
+
+```powershell MariaDB Status
+# Check if MariaDB is running
+Get-Process -Name mariadbd,mysqld -ErrorAction SilentlyContinue
+
+# Check port 3306
+netstat -ano | findstr :3306
+
+# Test database connection
+mysql -u root -p -e "SELECT VERSION();"
+```
+</CodeGroup>
+
+### Test PHP-FPM Connection
+
+Verify PHP-FPM is listening and responding:
+
+```powershell
+# Install telnet (one-time)
+Dism /Online /Enable-Feature /FeatureName:TelnetClient
+
+# Test connection to PHP-FPM
+telnet 127.0.0.1 9000
+
+# If connected successfully, you'll see a blank screen
+# Press Ctrl+] then type 'quit' to exit
+```
+
+**Alternative using PowerShell**:
+```powershell
+$port = 9000
+$connection = New-Object System.Net.Sockets.TcpClient
+try {
+    $connection.Connect("127.0.0.1", $port)
+    if ($connection.Connected) {
+        Write-Host "PHP-FPM is listening on port $port" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "Cannot connect to PHP-FPM on port $port" -ForegroundColor Red
+} finally {
+    $connection.Close()
+}
+```
+
+### Verify PHP Configuration
+
+<CodeGroup>
+```cmd Check PHP Version
+# Using current PHP
+php -v
+
+# Using specific version
+php83 -v
+php82 -v
+```
+
+```cmd Check PHP Modules
+# List loaded extensions
+php -m
+
+# Check specific extension
+php -m | findstr pdo_mysql
+php -m | findstr openssl
+```
+
+```cmd Verify php.ini Location
+# Show loaded php.ini
+php --ini
+
+# Check specific configuration value
+php -i | findstr "error_log"
+php -i | findstr "upload_max_filesize"
+```
+</CodeGroup>
+
+### Test Nginx Configuration
+
+```bash
+# Test configuration syntax
+nginx -t
+
+# Show configuration details
+nginx -T
+
+# Test with specific config file
+nginx -t -c C:\Path\To\nginx.conf
+```
+
+**Common configuration issues**:
+```nginx
+# Check for missing semicolons
+# Check for mismatched braces { }
+# Verify file paths use forward slashes
+# Ensure listen ports are not duplicated
+```
+
+### MariaDB Diagnostics
+
+<CodeGroup>
+```sql Connection Test
+-- Connect to MariaDB
+mysql -u root -p
+
+-- Show current status
+STATUS;
+
+-- Show running processes
+SHOW PROCESSLIST;
+
+-- Show databases
+SHOW DATABASES;
+```
+
+```sql Performance Diagnostics
+-- Show variables
+SHOW VARIABLES LIKE '%port%';
+SHOW VARIABLES LIKE '%socket%';
+
+-- Check table status
+SHOW TABLE STATUS FROM mydb;
+
+-- Identify slow queries (if enabled)
+SELECT * FROM mysql.slow_log ORDER BY query_time DESC LIMIT 10;
+```
+
+```powershell External Tools
+# Test connection via command line
+mysqladmin -u root -p ping
+
+# Show server status
+mysqladmin -u root -p status
+
+# Check server variables
+mysqladmin -u root -p variables
+```
+</CodeGroup>
+
+## Process Management
+
+### Stop All PHP-FPM Processes
+
+If PHP-FPM processes are stuck or unresponsive:
+
+```powershell
+# Method 1: Stop by name
+Get-Process -Name php-cgi -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Method 2: Stop by path (more precise)
+$envloomPath = "C:\Path\To\Envloom\bin\php"
+Get-Process -Name php-cgi -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -like "$envloomPath*" } |
+    Stop-Process -Force
+
+# Method 3: Using taskkill
+taskkill /IM php-cgi.exe /F
+```
+
+### Restart Nginx Safely
+
+```powershell
+# Stop Nginx gracefully
+nginx -s quit
+
+# Wait a few seconds, then check if stopped
+Get-Process -Name nginx -ErrorAction SilentlyContinue
+
+# Force stop if still running
+Get-Process -Name nginx -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Start Nginx
+Start-Process -FilePath "C:\Path\To\Envloom\bin\nginx\current\nginx.exe" -WorkingDirectory "C:\Path\To\Envloom\bin\nginx\current" -WindowStyle Hidden
+```
+
+### Stop MariaDB Safely
+
+```powershell
+# Graceful shutdown
+mysqladmin -u root -p shutdown
+
+# Force stop if needed
+Get-Process -Name mariadbd,mysqld -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Verify port is released
+netstat -ano | findstr :3306
+```
+
+## Network Diagnostics
+
+### Test Local Site Resolution
+
+```powershell
+# Test DNS resolution
+Resolve-DnsName mysite.test
+
+# Should return 127.0.0.1
+# If not, check hosts file
+
+# View hosts file
+notepad C:\Windows\System32\drivers\etc\hosts
+
+# Flush DNS cache
+ipconfig /flushdns
+```
+
+### Test HTTP/HTTPS Connectivity
+
+<CodeGroup>
+```powershell HTTP Test
+# Test HTTP connection
+Invoke-WebRequest -Uri http://mysite.test -UseBasicParsing
+
+# Show response headers
+$response = Invoke-WebRequest -Uri http://mysite.test -UseBasicParsing
+$response.Headers
+$response.StatusCode
+```
+
+```powershell HTTPS Test
+# Test HTTPS (skip certificate validation for local dev)
+[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+Invoke-WebRequest -Uri https://mysite.test -UseBasicParsing
+
+# Test with certificate validation
+Invoke-WebRequest -Uri https://mysite.test -UseBasicParsing
+```
+
+```powershell cURL Alternative
+# Using curl (Windows 10+)
+curl -I http://mysite.test
+curl -Ik https://mysite.test
+
+# Verbose output
+curl -v http://mysite.test
+```
+</CodeGroup>
+
+### Identify Port Conflicts
+
+```powershell
+# Find process using a specific port
+function Get-ProcessOnPort {
+    param([int]$Port)
+    $netstat = netstat -ano | Select-String ":$Port" | Select-String "LISTENING"
+    if ($netstat) {
+        $pid = ($netstat -split '\s+')[-1]
+        Get-Process -Id $pid -ErrorAction SilentlyContinue
+    }
+}
+
+# Usage
+Get-ProcessOnPort -Port 80
+Get-ProcessOnPort -Port 443
+Get-ProcessOnPort -Port 3306
+Get-ProcessOnPort -Port 9000
+```
+
+## File System Diagnostics
+
+### Verify Envloom Directory Structure
+
+```powershell
+# Check required directories exist
+$envloomPath = "C:\Path\To\Envloom"
+$requiredDirs = @("bin", "config", "logs", "sites")
+
+foreach ($dir in $requiredDirs) {
+    $path = Join-Path $envloomPath $dir
+    if (Test-Path $path) {
+        Write-Host "✓ $dir exists" -ForegroundColor Green
+    } else {
+        Write-Host "✗ $dir missing" -ForegroundColor Red
+    }
+}
+```
+
+### Check File Permissions
+
+```powershell
+# Check if current user has write access
+function Test-WriteAccess {
+    param([string]$Path)
+    try {
+        $testFile = Join-Path $Path "test_write_$(Get-Random).tmp"
+        [System.IO.File]::WriteAllText($testFile, "test")
+        Remove-Item $testFile -Force
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# Test critical directories
+Test-WriteAccess -Path "C:\Path\To\Envloom\logs"
+Test-WriteAccess -Path "C:\Path\To\Envloom\config"
+Test-WriteAccess -Path "C:\Windows\System32\drivers\etc"
+```
+
+### Verify Symlinks/Junctions
+
+```powershell
+# Check if current links exist and are valid
+$junctions = @(
+    "bin\php\current",
+    "bin\mariadb\current",
+    "bin\node\current"
+)
+
+foreach ($junction in $junctions) {
+    $path = Join-Path "C:\Path\To\Envloom" $junction
+    if (Test-Path $path) {
+        $target = (Get-Item $path).Target
+        Write-Host "✓ $junction -> $target" -ForegroundColor Green
+    } else {
+        Write-Host "✗ $junction missing" -ForegroundColor Red
+    }
+}
+```
+
+## Runtime Diagnostics
+
+### Verify PATH Configuration
+
+```powershell
+# Check if Envloom bin is in PATH
+$env:PATH -split ';' | Where-Object { $_ -like "*Envloom*" }
+
+# Test shim executables
+Get-Command php -ErrorAction SilentlyContinue
+Get-Command composer -ErrorAction SilentlyContinue
+Get-Command mysql -ErrorAction SilentlyContinue
+
+# Show full path
+(Get-Command php).Source
+(Get-Command composer).Source
+```
+
+### Check NVM Configuration
+
+```powershell
+# Check NVM environment variables
+$env:NVM_HOME
+$env:NVM_SYMLINK
+
+# Verify NVM is working
+nvm version
+nvm list
+nvm current
+
+# Test Node.js
+node --version
+npm --version
+```
+
+### Validate Runtime Installations
+
+<CodeGroup>
+```powershell PHP
+# Check PHP installations
+Get-ChildItem "C:\Path\To\Envloom\bin\php" -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+$' } |
+    ForEach-Object {
+        $phpExe = Join-Path $_.FullName "php.exe"
+        if (Test-Path $phpExe) {
+            $version = & $phpExe -v 2>&1 | Select-String "PHP (\d+\.\d+\.\d+)" |
+                ForEach-Object { $_.Matches.Groups[1].Value }
+            Write-Host "$($_.Name): $version" -ForegroundColor Green
+        } else {
+            Write-Host "$($_.Name): INVALID (missing php.exe)" -ForegroundColor Red
+        }
+    }
+```
+
+```powershell MariaDB
+# Check MariaDB installations
+Get-ChildItem "C:\Path\To\Envloom\bin\mariadb" -Directory |
+    Where-Object { $_.Name -match '^\d+\.\d+$' } |
+    ForEach-Object {
+        $mariadbExe = Join-Path $_.FullName "bin\mariadbd.exe"
+        $mysqlExe = Join-Path $_.FullName "bin\mysqld.exe"
+        if ((Test-Path $mariadbExe) -or (Test-Path $mysqlExe)) {
+            Write-Host "$($_.Name): OK" -ForegroundColor Green
+        } else {
+            Write-Host "$($_.Name): INVALID" -ForegroundColor Red
+        }
+    }
+```
+</CodeGroup>
+
+## SSL Certificate Diagnostics
+
+### Verify CA Certificate
+
+```powershell
+# Check if CA certificate exists
+$caPath = "C:\Path\To\Envloom\sites\ca\ca.crt"
+if (Test-Path $caPath) {
+    # Show certificate details
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+    $cert.Import($caPath)
+    
+    Write-Host "CA Certificate:"
+    Write-Host "  Subject: $($cert.Subject)"
+    Write-Host "  Issuer: $($cert.Issuer)"
+    Write-Host "  Valid From: $($cert.NotBefore)"
+    Write-Host "  Valid Until: $($cert.NotAfter)"
+} else {
+    Write-Host "CA certificate not found" -ForegroundColor Red
+}
+```
+
+### Check Site Certificate
+
+```powershell
+# Check site certificate
+$domain = "mysite.test"
+$certPath = "C:\Path\To\Envloom\sites\certs\$domain.crt"
+
+if (Test-Path $certPath) {
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+    $cert.Import($certPath)
+    
+    Write-Host "Certificate for $domain:"
+    Write-Host "  Subject: $($cert.Subject)"
+    Write-Host "  Valid Until: $($cert.NotAfter)"
+    Write-Host "  Expired: $($cert.NotAfter -lt (Get-Date))"
+} else {
+    Write-Host "Certificate not found for $domain" -ForegroundColor Red
+}
+```
+
+### Test SSL Connection
+
+```powershell
+# Test SSL certificate from browser perspective
+$domain = "mysite.test"
+$uri = "https://$domain"
+
+try {
+    $request = [System.Net.HttpWebRequest]::Create($uri)
+    $request.Timeout = 5000
+    $response = $request.GetResponse()
+    $cert = $request.ServicePoint.Certificate
+    
+    Write-Host "SSL Connection Successful" -ForegroundColor Green
+    Write-Host "  Subject: $($cert.Subject)"
+    Write-Host "  Issued By: $($cert.Issuer)"
+    Write-Host "  Valid Until: $($cert.GetExpirationDateString())"
+    
+    $response.Close()
+} catch {
+    Write-Host "SSL Connection Failed: $($_.Exception.Message)" -ForegroundColor Red
+}
+```
+
+## Log Analysis Techniques
+
+### Tail Logs in Real-Time
+
+```powershell
+# Tail runtime log (PowerShell equivalent of tail -f)
+Get-Content "C:\Path\To\Envloom\logs\runtime.log" -Wait -Tail 20
+
+# Tail PHP error log
+Get-Content "C:\Path\To\Envloom\logs\php\php-8_3.error.log" -Wait -Tail 20
+
+# Tail Nginx error log
+Get-Content "C:\Path\To\Envloom\logs\nginx\error.log" -Wait -Tail 20
+```
+
+### Filter and Search Logs
+
+```powershell
+# Find errors in runtime log
+Get-Content "C:\Path\To\Envloom\logs\runtime.log" | Select-String "ERROR"
+
+# Find specific error in PHP log
+Get-Content "C:\Path\To\Envloom\logs\php\php-8_3.error.log" | 
+    Select-String "Fatal error" -Context 2,5
+
+# Count errors by type
+Get-Content "C:\Path\To\Envloom\logs\nginx\error.log" |
+    Select-String "\[(\w+)\]" |
+    ForEach-Object { $_.Matches.Groups[1].Value } |
+    Group-Object | Sort-Object Count -Descending
+```
+
+### Extract Recent Errors
+
+```powershell
+# Get errors from last 24 hours
+function Get-RecentLogErrors {
+    param(
+        [string]$LogPath,
+        [int]$Hours = 24
+    )
+    
+    $cutoff = (Get-Date).AddHours(-$Hours)
+    Get-Content $LogPath |
+        Select-String "^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\].*ERROR" |
+        ForEach-Object {
+            if ($_ -match '^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]') {
+                $timestamp = [DateTime]::ParseExact(
+                    $matches[1],
+                    "yyyy-MM-dd HH:mm:ss",
+                    $null
+                )
+                if ($timestamp -gt $cutoff) {
+                    $_
+                }
+            }
+        }
+}
+
+# Usage
+Get-RecentLogErrors -LogPath "C:\Path\To\Envloom\logs\runtime.log" -Hours 24
+```
+
+## Performance Profiling
+
+### Monitor Resource Usage
+
+```powershell
+# Monitor Envloom-related processes
+function Watch-EnvloomProcesses {
+    while ($true) {
+        Clear-Host
+        Write-Host "Envloom Process Monitor - $(Get-Date)" -ForegroundColor Cyan
+        Write-Host "="*80
+        
+        Get-Process php-cgi,nginx,mariadbd,mysqld -ErrorAction SilentlyContinue |
+            Format-Table Name, Id, 
+                @{Name="CPU(%)";Expression={$_.CPU}},
+                @{Name="Memory(MB)";Expression={[math]::Round($_.WorkingSet64/1MB,2)}},
+                StartTime -AutoSize
+        
+        Start-Sleep -Seconds 2
+    }
+}
+
+Watch-EnvloomProcesses
+```
+
+### Analyze Site Response Time
+
+```powershell
+# Measure site response time
+function Measure-SiteResponse {
+    param([string]$Url)
+    
+    $measurements = 1..10 | ForEach-Object {
+        $start = Get-Date
+        try {
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing
+            $end = Get-Date
+            ($end - $start).TotalMilliseconds
+        } catch {
+            -1
+        }
+    }
+    
+    $valid = $measurements | Where-Object { $_ -gt 0 }
+    [PSCustomObject]@{
+        Url = $Url
+        Average = ($valid | Measure-Object -Average).Average
+        Min = ($valid | Measure-Object -Minimum).Minimum
+        Max = ($valid | Measure-Object -Maximum).Maximum
+    }
+}
+
+Measure-SiteResponse -Url "http://mysite.test"
+```
+
+## When to Seek Further Help
+
+If you've exhausted these debugging techniques:
+
+1. **Gather diagnostic information**:
+   - Recent log excerpts from relevant logs
+   - Service status output
+   - System environment details (Windows version, Envloom version)
+
+2. **Document the issue**:
+   - Steps to reproduce
+   - Expected vs actual behavior
+   - What you've already tried
+
+3. **Report the issue**:
+   - Check existing issues in the Envloom repository
+   - Create a new issue with diagnostic information
+   - Include relevant configuration files (sanitize passwords)
+
+## Related Resources
+
+- [Common Issues](/troubleshooting/common-issues) - Quick solutions to frequent problems
+- [Understanding Logs](/troubleshooting/logs) - Log file locations and formats

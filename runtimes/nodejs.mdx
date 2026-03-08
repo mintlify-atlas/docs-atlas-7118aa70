@@ -1,0 +1,424 @@
+---
+title: 'Node.js Runtime'
+description: 'Manage Node.js versions using NVM for Windows in Envloom'
+icon: 'node-js'
+---
+
+## Overview
+
+Envloom integrates NVM for Windows to provide seamless Node.js version management. Multiple Node.js versions can be installed side-by-side, with instant switching between versions for development and testing.
+
+## NVM Integration
+
+### Installation
+
+Envloom automatically installs NVM for Windows during bootstrap:
+
+<Steps>
+  <Step title="Download NVM">
+    Fetches the latest `nvm-noinstall.zip` from [coreybutler/nvm-windows](https://github.com/coreybutler/nvm-windows/releases)
+  </Step>
+  
+  <Step title="Extract and Configure">
+    Extracts to `bin/nvm/` and generates `settings.txt` with local paths
+  </Step>
+  
+  <Step title="Elevated Setup">
+    Runs `install-elevated.cmd` to configure NVM environment variables:
+    - `NVM_HOME` → `bin/nvm`
+    - `NVM_SYMLINK` → `bin/node/current`
+  </Step>
+  
+  <Step title="Verify Installation">
+    Tests `nvm version` to confirm successful setup
+  </Step>
+</Steps>
+
+<Note>
+  If NVM installation fails due to UAC denial, you can manually run `bin/nvm/install-elevated.cmd` as administrator.
+</Note>
+
+### NVM Configuration
+
+Envloom configures NVM to use local directories:
+
+```txt
+root: C:\path\to\envloom\bin\nvm
+path: C:\path\to\envloom\bin\node\current
+arch: 64
+proxy: none
+```
+
+Node versions install to `bin/node/<version>/` with a symlink at `bin/node/current` pointing to the active version.
+
+## Version Management
+
+### Available Versions
+
+Envloom displays Node.js LTS and current releases organized by major version:
+
+- **25** (Current)
+- **22** (LTS Active)
+- **20** (LTS Maintenance)
+- **18** (LTS Maintenance)
+- **16** (End of Life)
+
+### Installing Node Versions
+
+Install Node.js by major version - NVM automatically fetches the latest build:
+
+<Tabs>
+  <Tab title="UI">
+    1. Navigate to the Node page
+    2. Find the desired major version (e.g., 22)
+    3. Click "Install"
+    4. Wait for download and extraction
+  </Tab>
+  
+  <Tab title="CLI">
+    ```bash
+    # Install by major version
+    loom node 22
+    
+    # Or specific version
+    loom node 22.11.0
+    ```
+  </Tab>
+</Tabs>
+
+### Version Switching
+
+Switch Node.js versions instantly without reinstalling:
+
+```bash
+# Switch to installed version
+loom node 20
+
+# Check current version
+loom current
+node --version
+```
+
+<CodeGroup>
+```bash PowerShell (Direct)
+# Via NVM directly
+nvm use 22.11.0
+nvm current
+```
+
+```typescript TypeScript (API)
+// Via Tauri API
+await setNodeCurrentVersion("22.11.0");
+const catalog = await getNodeCatalog();
+console.log(catalog.currentVersion); // "22.11.0"
+```
+</CodeGroup>
+
+### First Install Behavior
+
+<Warning>
+  The first Node.js version you install automatically becomes the current version. Subsequent installations do NOT change the current version.
+</Warning>
+
+This prevents accidental version switches when installing additional Node versions for testing.
+
+### Uninstalling Versions
+
+```bash
+# Via CLI
+loom node uninstall 20.10.0
+
+# Via UI
+# Click uninstall button next to installed version
+```
+
+## Version Detection
+
+### Catalog Building
+
+Envloom builds the Node catalog by querying NVM:
+
+```typescript
+// Get available versions
+const availableOutput = await runNvmCommand(["list", "available"]);
+
+// Get installed versions
+const installedOutput = await runNvmCommand(["list"]);
+
+// Get current version
+const currentOutput = await runNvmCommand(["current"]);
+```
+
+### Version Parsing
+
+Versions are extracted using regex and sorted by semantic versioning:
+
+```rust
+fn extract_versions_from_text(text: &str) -> Vec<String> {
+    // Extracts patterns like "22.11.0", "20.10.1"
+    // Sorts by version (newest first)
+    // Deduplicates
+}
+
+fn latest_by_major(versions: &[String]) -> HashMap<String, String> {
+    // Groups by major version
+    // Returns latest build per major
+}
+```
+
+## PATH Integration
+
+Envloom manages the system PATH to include Node.js:
+
+```bash
+# Added to User PATH
+C:\path\to\envloom\bin\node\current
+```
+
+The `current` symlink updates automatically when switching versions, so no PATH changes are needed.
+
+### Environment Variables
+
+```bash
+# Set by NVM installation
+NVM_HOME=C:\path\to\envloom\bin\nvm
+NVM_SYMLINK=C:\path\to\envloom\bin\node\current
+```
+
+## Using Node.js
+
+### Global Commands
+
+Once installed, Node.js commands work globally:
+
+```bash
+# Node REPL
+node
+
+# NPM commands
+npm install
+npm run dev
+npm run build
+
+# NPX for one-off commands
+npx create-vite@latest
+npx tsc --init
+```
+
+### Site Provisioning
+
+Envloom uses Node during Laravel site provisioning:
+
+```bash
+# Install dependencies
+npm install
+
+# Or with fallback for peer dependency issues
+npm install --legacy-peer-deps
+
+# Build assets
+npm run build
+```
+
+### Package Management
+
+```bash
+# Install dependencies
+cd my-site
+npm install
+
+# Add packages
+npm install -D vite
+npm install axios
+
+# Update packages
+npm update
+npm outdated
+```
+
+## CLI Commands
+
+### Version Management
+
+```bash
+# Install major version (gets latest)
+loom node 22
+
+# Install specific version
+loom node 20.10.1
+
+# List all installed versions
+loom list node
+
+# Check current version
+loom current
+```
+
+### NVM Direct Commands
+
+```bash
+# List available versions
+nvm list available
+
+# List installed versions
+nvm list
+
+# Install specific version
+nvm install 22.11.0
+
+# Switch version
+nvm use 22.11.0
+
+# Check current
+nvm current
+
+# Uninstall
+nvm uninstall 20.10.0
+```
+
+## API Reference
+
+### TypeScript Types
+
+```typescript
+type NodeLineRuntime = {
+  line: string;              // Major version ("22")
+  latestVersion: string | null;  // Latest available ("22.11.0")
+  installedVersion: string | null; // Installed version
+  isCurrent: boolean;        // Is this the active version?
+};
+
+type NodeCatalogResponse = {
+  nvmAvailable: boolean;     // Is NVM installed and working?
+  error: string | null;      // Error message if any
+  currentVersion: string | null; // Active version ("22.11.0")
+  installedVersions: string[]; // All installed versions
+  runtimes: NodeLineRuntime[]; // Catalog by major version
+};
+```
+
+### API Methods
+
+```typescript
+// Get catalog
+const catalog = await getNodeCatalog();
+
+// Install by major (fetches latest)
+await installNodeMajor("22");
+
+// Set current version
+await setNodeCurrentVersion("22.11.0");
+
+// Uninstall version
+await uninstallNodeVersion("20.10.0");
+```
+
+## Troubleshooting
+
+### NVM Not Available
+
+If `getNodeCatalog()` returns `nvmAvailable: false`:
+
+1. Check if `bin/nvm/nvm.exe` exists
+2. Verify environment variables:
+   ```bash
+   echo %NVM_HOME%
+   echo %NVM_SYMLINK%
+   ```
+3. Re-run elevated installer:
+   ```bash
+   cd bin\nvm
+   install-elevated.cmd
+   ```
+4. Restart Envloom
+
+### Installation Failures
+
+```bash
+# Check NVM logs
+type %APPDATA%\nvm\nvm.log
+
+# Test NVM directly
+nvm version
+nvm list available
+```
+
+Common issues:
+- Firewall blocking downloads
+- Insufficient disk space
+- Corrupted download (retry install)
+
+### Version Switch Not Working
+
+If Node version doesn't change after `nvm use`:
+
+1. Check symlink exists:
+   ```bash
+   dir bin\node\current
+   ```
+2. Verify PATH includes symlink directory
+3. Restart terminal/IDE to refresh environment
+4. Run `loom reload` to refresh services
+
+### Permission Errors
+
+NVM requires elevated permissions for initial setup:
+
+```bash
+# Run as administrator
+cd bin\nvm
+install-elevated.cmd
+```
+
+After initial setup, normal user permissions are sufficient.
+
+## Update Checking
+
+Envloom does NOT automatically check for Node.js updates. Use NVM directly:
+
+```bash
+# Check available versions
+nvm list available
+
+# Install newer version
+nvm install 22.12.0
+
+# Switch to it
+nvm use 22.12.0
+```
+
+Or use Envloom UI to see latest available versions per major line.
+
+## Best Practices
+
+### Version Selection
+
+<Accordion title="Use LTS for Production">
+  Always use LTS (Long Term Support) versions for production sites:
+  - Node 22 (LTS Active until 2027)
+  - Node 20 (LTS until 2026)
+  - Node 18 (LTS until 2025)
+</Accordion>
+
+<Accordion title="Test on Current for Features">
+  Use current release (Node 25+) for testing new features, but don't deploy to production.
+</Accordion>
+
+<Accordion title="Match Production Environment">
+  Install the same Node version locally that you use in production to avoid compatibility issues.
+</Accordion>
+
+### Package Management
+
+```bash
+# Lock dependencies for reproducibility
+npm ci  # Uses package-lock.json exactly
+
+# Update carefully
+npm update --save
+npm audit fix
+
+# Use .nvmrc for version consistency
+echo "22.11.0" > .nvmrc
+nvm use  # Reads from .nvmrc
+```

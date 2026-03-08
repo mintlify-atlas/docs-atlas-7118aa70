@@ -1,0 +1,204 @@
+---
+title: CLI Overview
+description: Introduction to the Envloom command-line interface for managing development environments
+---
+
+The Envloom CLI (`loom`) provides command-line access to manage your local development stack directly from your terminal. It's integrated into the main Envloom application and shares the same binary.
+
+## Installation
+
+The `loom` command is automatically available when you install Envloom. The CLI uses a shim located in your `bin` directory that calls the main Envloom executable with the `--cli` flag.
+
+### Verifying Installation
+
+Check that the CLI is properly installed:
+
+```bash
+loom --help
+```
+
+You should see the usage information for all available commands.
+
+## Basic Usage
+
+The CLI follows a simple command structure:
+
+```bash
+loom <command> [arguments]
+```
+
+### Available Commands
+
+<CardGroup cols={2}>
+  <Card title="current" icon="circle-check">
+    Display current versions of all runtimes
+  </Card>
+  <Card title="list" icon="list">
+    List installed versions of a specific runtime
+  </Card>
+  <Card title="php" icon="php">
+    Switch the current PHP version
+  </Card>
+  <Card title="node" icon="node-js">
+    Switch the current Node.js version
+  </Card>
+  <Card title="link" icon="link">
+    Link the current directory as an Envloom site
+  </Card>
+  <Card title="unlink" icon="link-slash">
+    Unlink the current directory from Envloom
+  </Card>
+  <Card title="ssl" icon="lock">
+    Enable or disable SSL for the current site
+  </Card>
+</CardGroup>
+
+## Quick Examples
+
+### Check Current Versions
+
+```bash
+loom current
+```
+
+**Output:**
+```
+php=8.5
+node=23.5.0
+mysql=11.7
+nginx=1.27.3
+```
+
+### List Installed PHP Versions
+
+```bash
+loom list php
+```
+
+**Output:**
+```
+8.4
+8.5
+```
+
+### Switch PHP Version
+
+```bash
+loom php 8.4
+```
+
+**Output:**
+```
+PHP current set to 8.4
+```
+
+### Link Current Directory
+
+Navigate to your project directory and link it with a specific PHP version:
+
+```bash
+cd ~/projects/my-laravel-app
+loom link 8.5
+```
+
+**Output:**
+```
+Linked my-laravel-app.test -> C:\Users\username\projects\my-laravel-app
+```
+
+## How It Works
+
+The `loom` CLI is a wrapper script that:
+
+1. Locates the Envloom executable (production or development build)
+2. Passes all arguments to the executable with the `--cli` flag
+3. Shares the same configuration and state as the GUI application
+
+<Note>
+CLI commands operate on the same data as the GUI. Changes made via CLI are immediately reflected in the desktop app and vice versa.
+</Note>
+
+## Command Categories
+
+The CLI commands are organized into three main categories:
+
+### Runtime Management
+
+Commands for viewing and switching runtime versions:
+- `loom current` - View current versions
+- `loom list <runtime>` - List installed versions
+- `loom php <version>` - Switch PHP version
+- `loom node <version>` - Switch Node version
+
+[Learn more about runtime management →](/cli/runtime-management)
+
+### Site Management
+
+Commands for managing local development sites:
+- `loom link <php-version>` - Link current directory
+- `loom unlink` - Unlink current directory
+- `loom ssl <on|off>` - Toggle SSL for current site
+
+[Learn more about site management →](/cli/site-management)
+
+## Configuration
+
+The CLI uses the following paths:
+
+<ParamField path="bin" type="directory">
+  Location of runtime binaries and shims
+  
+  **Production:** `C:\Program Files\Envloom\bin`  
+  **Development:** `<project>\src-tauri\bin`
+</ParamField>
+
+<ParamField path="config" type="directory">
+  Global configuration and site data
+  
+  **Location:** `%LOCALAPPDATA%\Envloom`  
+  **Key files:** `sites.json`, runtime state files
+</ParamField>
+
+<ParamField path=".envloom" type="directory">
+  User-specific global settings
+  
+  **Location:** `%USERPROFILE%\.envloom`  
+  **Key files:** `config.json`
+</ParamField>
+
+## Error Handling
+
+The CLI provides clear error messages when operations fail:
+
+```bash
+loom link 9.0
+```
+
+**Output:**
+```
+Error: php line 9.0 is not installed
+```
+
+```bash
+loom unlink
+```
+
+**Output:**
+```
+Error: current directory is not linked in Envloom
+```
+
+<Tip>
+Run `loom --help` or `loom -h` to see the complete list of available commands and their syntax.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Runtime Management" icon="server" href="/cli/runtime-management">
+    Learn how to manage PHP, Node, and MySQL versions
+  </Card>
+  <Card title="Site Management" icon="globe" href="/cli/site-management">
+    Link projects and configure local sites
+  </Card>
+</CardGroup>

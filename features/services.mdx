@@ -1,0 +1,545 @@
+---
+title: "Service Lifecycle Management"
+description: "Control PHP-FPM, Nginx, and MariaDB services with automatic startup, graceful shutdown, and real-time status monitoring"
+---
+
+## Overview
+
+Envloom manages the lifecycle of all runtime services automatically, with options for manual control and auto-start configuration.
+
+<CardGroup cols={3}>
+  <Card title="PHP-FPM" icon="php">
+    Per-version FastCGI processes
+  </Card>
+  <Card title="Nginx" icon="server">
+    Web server with auto-reload
+  </Card>
+  <Card title="MariaDB" icon="database">
+    Database server with graceful shutdown
+  </Card>
+</CardGroup>
+
+## Service Status Monitoring
+
+### Real-Time Status Display
+
+The **Dashboard** shows live service status with automatic updates:
+
+```typescript Service status structure
+{
+  key: "php",
+  label: "PHP-FPM",
+  status: "running" | "stopped" | "starting" | "error",
+  healthy: true | false,
+  version: "8.3.0",
+  port: "9083"
+}
+```
+
+### Status States
+
+<Tabs>
+  <Tab title="Running">
+    <Note>Service is active and responding</Note>
+    
+    **Indicators**:
+    - Process is running (e.g., `nginx.exe`, `php-cgi.exe`, `mariadbd.exe`)
+    - Port is listening (verified via TCP connection)
+    - Status badge shows green/success state
+  </Tab>
+  
+  <Tab title="Stopped">
+    <Note>Service is not running</Note>
+    
+    **Indicators**:
+    - Process not found in task list
+    - Port is not listening
+    - Status badge shows gray/inactive state
+  </Tab>
+  
+  <Tab title="Starting">
+    <Note>Service is launching (transient state)</Note>
+    
+    **Indicators**:
+    - Displayed during bootstrap or manual start
+    - Typically lasts 1-3 seconds
+    - Automatically transitions to "running" or "error"
+  </Tab>
+  
+  <Tab title="Error">
+    <Warning>Service failed to start or crashed</Warning>
+    
+    **Common causes**:
+    - Port conflict (already in use)
+    - Configuration syntax error
+    - Missing dependencies
+    - Insufficient permissions
+  </Tab>
+</Tabs>
+
+## PHP-FPM Service Management
+
+### Multi-Version Architecture
+
+Envloom runs **all installed PHP versions simultaneously** as separate `php-cgi.exe` processes:
+
+```bash PHP-FPM processes
+# Each installed version runs on its own port
+php-cgi.exe -b 127.0.0.1:9083 -c C:/path/to/bin/php/8.3/php.ini
+php-cgi.exe -b 127.0.0.1:9082 -c C:/path/to/bin/php/8.2/php.ini
+php-cgi.exe -b 127.0.0.1:9081 -c C:/path/to/bin/php/8.1/php.ini
+```
+
+### Automatic Startup
+
+<Steps>
+  <Step title="App Launch">
+    When Envloom starts, it checks the `autoStartServices` setting
+  </Step>
+  
+  <Step title="Enumerate Installed Versions">
+    Scans `bin/php` directory for installed versions
+  </Step>
+  
+  <Step title="Start Each Version">
+    For each installed PHP version:
+    1. Calculate port: `base_port + (major * 10 + minor)`
+    2. Verify `php-cgi.exe` exists
+    3. Launch hidden process: `php-cgi.exe -b {port} -c {php.ini}`
+    4. Wait up to 3 seconds for port to open
+  </Step>
+  
+  <Step title="Verify Status">
+    Check if each PHP-FPM process is listening on its assigned port
+  </Step>
+</Steps>
+
+<Note>
+  PHP-FPM processes run as **hidden windows** (`CREATE_NO_WINDOW` flag) to avoid console popups.
+</Note>
+
+### Graceful Shutdown
+
+When stopping PHP-FPM (or when Envloom closes):
+
+```powershell Shutdown sequence (src-tauri/src/lib.rs:439-462)
+# 1. Find all php-cgi.exe processes in Envloom's install directory
+Get-Process -Name 'php-cgi' | Where-Object { 
+    $_.ExecutablePath -like 'C:/path/to/bin/php/*' 
+} | Stop-Process -Force
+
+# 2. Fallback: Use CIM to find by command line
+Get-CimInstance Win32_Process -Filter "Name='php-cgi.exe'" | 
+    Where-Object { $_.CommandLine -like '*C:/path/to/bin/php/*' } | 
+    Invoke-CimMethod -MethodName Terminate
+
+# 3. Last resort: Kill all php-cgi.exe (if still running)
+taskkill /IM php-cgi.exe /F
+
+# 4. Verify all processes terminated
+if (Get-Process -Name 'php-cgi') { error }
+```
+
+<Warning>
+  If PHP-FPM processes don't stop cleanly, Envloom will show an error. Check for hung processes manually.
+</Warning>
+
+### Restart Behavior
+
+**Restart** = **Stop** → **Start**:
+
+1. Kill all PHP-FPM processes (via shutdown sequence)
+2. Wait for confirmation that processes stopped
+3. Re-launch each installed version
+4. Verify each port is listening
+
+## Nginx Service Management
+
+### Automatic Configuration
+
+Before starting, Nginx configuration is validated:
+
+```bash Nginx startup (src-tauri/src/lib.rs:2502-2550)
+# 1. Test configuration syntax
+nginx.exe -t -p "C:/path/to/bin/nginx/current"
+
+# 2. If test passes, start Nginx
+Start-Process -WindowStyle Hidden -FilePath nginx.exe -ArgumentList '-p', 'C:/path/to/bin/nginx/current'
+
+# 3. Verify process is running (up to 3 seconds)
+if (Get-Process -Name 'nginx') { success } else { error }
+```
+
+<Note>
+  If Nginx exits immediately after start, Envloom displays the last 80 lines of `logs/nginx/error.log`.
+</Note>
+
+### Reload on Configuration Change
+
+When site configs change (e.g., SSL toggle, PHP version switch), Nginx is **reloaded** without downtime:
+
+```bash Graceful reload (src-tauri/src/lib.rs:2575-2596)
+nginx.exe -s reload -p "C:/path/to/bin/nginx/current"
+```
+
+**Reload triggers**:
+- New site created
+- Site deleted/unlinked
+- SSL enabled/disabled for a site
+- PHP version changed for a site
+- Manual **Reload All** action
+
+### Graceful Shutdown
+
+```bash Nginx stop sequence (src-tauri/src/lib.rs:2552-2573)
+# 1. Graceful shutdown signal
+nginx.exe -s stop -p "C:/path/to/bin/nginx/current"
+
+# 2. If still running after signal, force kill by path
+Get-Process -Name 'nginx' | Where-Object { 
+    $_.ExecutablePath -like 'C:/path/to/bin/nginx/*' 
+} | Stop-Process -Force
+```
+
+<Warning>
+  Nginx runs as a **master process** with **worker processes**. The stop command must kill both.
+</Warning>
+
+## MariaDB Service Management
+
+### Initialization & First Start
+
+When MariaDB is first installed:
+
+<Steps>
+  <Step title="Install Database">
+    Run `mysql_install_db.exe` (or `mariadb-install-db.exe`) to create data directory
+  </Step>
+  
+  <Step title="Start Server">
+    Launch `mariadbd.exe` (or `mysqld.exe`) with `--defaults-file=my.ini`
+  </Step>
+  
+  <Step title="Set Root Password">
+    Execute `mysqladmin` to set root password:
+    ```bash
+    mysqladmin -u root password "your_password"
+    ```
+  </Step>
+  
+  <Step title="Verify Connection">
+    Test connection on configured port (default 3306)
+  </Step>
+</Steps>
+
+### Auto-Start Behavior
+
+MariaDB auto-starts **only if already installed**:
+
+```javascript Auto-start logic
+if (autoStartServices && mariadb_current_link_exists) {
+    start_mariadb()
+}
+```
+
+<Note>
+  Unlike PHP and Nginx, MariaDB is **not** downloaded during bootstrap. You must manually install it first.
+</Note>
+
+### Enhanced Stop Logic
+
+MariaDB shutdown is reinforced with multiple fallback mechanisms:
+
+```powershell MariaDB stop sequence (src-tauri/src/lib.rs:2076)
+# 1. Graceful shutdown via command
+mariadbd.exe --shutdown
+
+# 2. Kill all processes in MariaDB runtime directory
+Get-Process | Where-Object { 
+    $_.ExecutablePath -like 'C:/path/to/bin/mariadb/*' 
+} | Stop-Process -Force
+
+# 3. Verify port 3306 is closed
+for (i = 0; i < 10; i++) {
+    if (!is_port_open(3306)) { break }
+    sleep(500ms)
+}
+
+# 4. Final check
+if (is_port_open(3306)) { error }
+```
+
+<Warning>
+  If port verification fails after 5 seconds, Envloom reports that MariaDB did not stop cleanly.
+</Warning>
+
+## Global Service Actions
+
+### Start All
+
+From the **Dashboard** or **system tray**, click **Start All** to:
+
+1. Start all installed PHP-FPM versions
+2. Start Nginx (if installed)
+3. Start MariaDB (if installed and configured)
+
+<Note>
+  Services are started in sequence, not in parallel. Nginx starts after PHP-FPM to ensure FastCGI backends are ready.
+</Note>
+
+### Stop All
+
+From the **Dashboard** or **system tray**, click **Stop All** to:
+
+1. Stop Nginx (graceful shutdown)
+2. Stop all PHP-FPM processes
+3. Stop MariaDB (shutdown + port verification)
+
+### Reload All
+
+From the **system tray**, click **Reload All** to:
+
+1. **Nginx**: `nginx -s reload` (graceful config reload)
+2. **PHP-FPM**: Restart all processes (stop → start)
+3. **MariaDB**: No action (restart required via Stop → Start)
+
+<Note>
+  **Reload All** does **not** restart MariaDB. Use Stop All → Start All if you need to restart the database.
+</Note>
+
+## Auto-Start Configuration
+
+### Settings Control
+
+<Tabs>
+  <Tab title="Enable Auto-Start">
+    Navigate to **Settings** and toggle **Auto-start services**:
+    
+    ```json settings (config.json)
+    {
+      "autoStartServices": true
+    }
+    ```
+    
+    **Behavior**:
+    - Services start automatically when Envloom launches
+    - Default: **enabled**
+  </Tab>
+  
+  <Tab title="Disable Auto-Start">
+    Toggle **Auto-start services** off:
+    
+    ```json settings (config.json)
+    {
+      "autoStartServices": false
+    }
+    ```
+    
+    **Behavior**:
+    - Services remain stopped on launch
+    - Manually start via **Start All** or individual service actions
+  </Tab>
+</Tabs>
+
+### Start with Windows
+
+Envloom can launch when Windows starts:
+
+<Steps>
+  <Step title="Enable in Settings">
+    Toggle **Start with Windows** in **Settings**
+  </Step>
+  
+  <Step title="Registry Entry Created">
+    Envloom adds itself to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`:
+    ```registry
+    [HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run]
+    "Envloom"="C:\path\to\Envloom.exe"
+    ```
+  </Step>
+  
+  <Step title="Optional: Start Minimized">
+    Enable **Start minimized** to launch Envloom to system tray without showing the main window
+  </Step>
+</Steps>
+
+<Note>
+  **Start with Windows** + **Auto-start services** = Fully automated local development stack on boot.
+</Note>
+
+## Automatic Shutdown on Exit
+
+### Clean Exit Behavior
+
+When you close Envloom (via window close or **Quit** from tray):
+
+```rust Shutdown handler (src-tauri/src/lib.rs:5902-5912)
+static SHUTDOWN_STOP_TRIGGERED: AtomicBool = AtomicBool::new(false);
+
+fn stop_services_on_shutdown(app: &tauri::AppHandle) {
+    if SHUTDOWN_STOP_TRIGGERED.swap(true, Ordering::SeqCst) {
+        return; // Already triggered, skip
+    }
+    
+    let _ = stop_php_fpm_services(php_install_dir);
+    let _ = stop_nginx_if_running(nginx_root);
+    let _ = stop_mariadb_if_running(mariadb_install_dir);
+}
+```
+
+<Warning>
+  The shutdown handler ensures services stop **only once**, even if multiple close events fire.
+</Warning>
+
+### Force Quit Protection
+
+If Envloom crashes or is force-killed:
+
+- **PHP-FPM**: Orphaned `php-cgi.exe` processes may remain
+- **Nginx**: Nginx processes may stay running
+- **MariaDB**: MariaDB may require manual `mysqladmin shutdown`
+
+**Cleanup**:
+```bash Manual cleanup after crash
+# Kill orphaned PHP-FPM
+taskkill /IM php-cgi.exe /F
+
+# Stop Nginx
+C:\path\to\bin\nginx\current\nginx.exe -s stop
+
+# Stop MariaDB
+mysqladmin -u root -p shutdown
+```
+
+## System Tray Service Controls
+
+The **system tray menu** provides quick access to service actions:
+
+```
+Envloom v0.1.2
+─────────────────
+✓ Start all
+✗ Stop all
+↻ Reload all
+─────────────────
+Sites ▶
+  myapp.test
+  another-site.test
+PHP ▶
+  Current: 8.3
+  Switch version ▶
+Nginx ▶
+  SSL all on
+  SSL all off
+MySQL ▶
+  Current: 11.4
+─────────────────
+Quit
+```
+
+### Dynamic Menu Updates
+
+The tray menu refreshes automatically after:
+- Service start/stop/reload
+- PHP version switch
+- MariaDB version switch
+- Site creation/deletion
+
+<Note>
+  The menu shows **real-time** current versions and service states.
+</Note>
+
+## Service Logs
+
+View service logs from the **Logs** page:
+
+### PHP Logs
+
+- **Location**: `logs/php/php-{major}_{minor}.error.log`
+- **Selector**: Choose "Current" or specific version (e.g., "8.3")
+- **Content**: PHP errors, warnings, and notices
+
+### Nginx Logs
+
+- **General Access**: `logs/nginx/access.log`
+- **General Error**: `logs/nginx/error.log`
+- **Per-Site Access**: `logs/nginx/sites/{domain}.access.log`
+- **Per-Site Error**: `logs/nginx/sites/{domain}.error.log`
+
+### MariaDB Logs
+
+- **Error Log**: `logs/mariadb/mariadb.error.log`
+- **General Log**: `logs/mariadb/mariadb.general.log`
+- **Slow Query Log**: `logs/mariadb/mariadb.slow.log`
+
+<Note>
+  Logs are displayed using `@melloware/react-logviewer` with auto-refresh capability.
+</Note>
+
+## CLI Service Commands
+
+<Warning>
+  CLI service control commands (`loom start`, `loom stop`, `loom reload`) are **planned** but not yet implemented. Use the desktop UI or system tray for now.
+</Warning>
+
+```bash Future CLI commands (not yet available)
+# Start all services
+loom start
+
+# Stop all services
+loom stop
+
+# Reload Nginx
+loom reload
+
+# View logs
+loom logs php
+loom logs nginx
+```
+
+## Troubleshooting
+
+### PHP-FPM Won't Start
+
+1. **Port conflict**: Check if port is in use
+   ```bash
+   netstat -ano | findstr :9083
+   ```
+2. **Missing php-cgi.exe**: Verify file exists in `bin/php/{version}/php-cgi.exe`
+3. **Config error**: Check `bin/php/{version}/php.ini` syntax
+4. **Logs**: Review `logs/php/php-{version}.error.log`
+
+### Nginx Won't Start
+
+1. **Config test**: Run `nginx -t` manually
+   ```bash
+   cd bin/nginx/current
+   nginx.exe -t
+   ```
+2. **Port 80/443 in use**: Close other web servers (IIS, Apache, etc.)
+3. **SSL cert missing**: Ensure certificates exist in `sites/certs/`
+4. **Error log**: Check `logs/nginx/error.log`
+
+### MariaDB Won't Start
+
+1. **Not initialized**: Run installation from **Runtime > MariaDB**
+2. **Port 3306 conflict**: Change port in MariaDB settings
+3. **Data directory**: Verify `bin/mariadb/{version}/data` exists
+4. **Error log**: Review `logs/mariadb/mariadb.error.log`
+
+### Services Don't Stop
+
+1. **Force kill**: Use Task Manager to end processes
+2. **Check locks**: Ensure no other app is using service ports
+3. **Restart Envloom**: Close and reopen to reset service state
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Runtime Management" href="/features/runtimes" icon="gear">
+    Install and configure PHP, Node, MariaDB, Nginx
+  </Card>
+  <Card title="Site Management" href="/features/sites" icon="globe">
+    Configure per-site PHP versions and services
+  </Card>
+</CardGroup>

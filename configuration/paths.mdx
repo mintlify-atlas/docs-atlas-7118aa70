@@ -1,0 +1,336 @@
+---
+title: "File Structure & Paths"
+description: "Understanding Envloom's directory structure, runtime installations, configuration files, and log locations"
+icon: "folder-tree"
+---
+
+## Overview
+
+Envloom organizes all runtime binaries, configuration files, logs, and site configurations in a predictable directory structure. Understanding this layout is essential for troubleshooting, manual configuration, and integration with other tools.
+
+<Note>
+  In production builds, Envloom's root directory is the folder containing `Envloom.exe`. In development, it uses the `src-tauri/bin` directory relative to the project root.
+</Note>
+
+## Root Directory Structure
+
+The Envloom installation directory contains the following key folders:
+
+```plaintext
+Envloom/
+├── Envloom.exe              # Main application executable
+├── bin/                     # Runtime binaries and shims
+├── config/                  # Configuration templates
+├── logs/                    # Centralized logging directory
+└── sites/                   # Site-specific nginx configs and SSL certificates
+```
+
+## bin/ - Runtime Binaries
+
+All runtime executables, version-specific installations, and shims are stored in the `bin` directory:
+
+```plaintext
+bin/
+├── php/
+│   ├── 8.1/                 # PHP 8.1 installation
+│   │   ├── php.exe
+│   │   ├── php-cgi.exe
+│   │   ├── php.ini          # Version-specific php.ini
+│   │   └── ext/             # PHP extensions
+│   ├── 8.2/                 # PHP 8.2 installation
+│   ├── 8.3/                 # PHP 8.3 installation
+│   └── current/             # Junction to active PHP version
+├── node/
+│   ├── 18.0.0/
+│   ├── 20.0.0/
+│   └── current/             # Junction to active Node version
+├── mariadb/
+│   ├── 10.11/
+│   │   ├── bin/
+│   │   │   ├── mariadb.exe
+│   │   │   ├── mysql.exe    # May be symlink or actual binary
+│   │   │   └── mysqladmin.exe
+│   │   ├── my.ini           # MariaDB configuration
+│   │   └── data/            # Database files
+│   ├── 11.4/
+│   └── current/             # Junction to active MariaDB version
+├── nginx/
+│   ├── 1.27.4/
+│   │   ├── nginx.exe
+│   │   └── conf/
+│   └── current/             # Junction to active Nginx version
+├── nvm/
+│   ├── nvm.exe              # Node Version Manager
+│   └── settings.txt         # NVM configuration
+├── composer/
+│   └── composer.phar        # Composer dependency manager
+├── _downloads/              # Temporary downloads (auto-cleaned)
+├── php.cmd                  # Shim for current PHP
+├── php81.cmd                # Version-specific PHP 8.1 shim
+├── php82.cmd                # Version-specific PHP 8.2 shim
+├── php83.cmd                # Version-specific PHP 8.3 shim
+├── composer.cmd             # Composer shim
+├── nginx.cmd                # Nginx shim
+├── mariadb.cmd              # MariaDB client shim
+├── mysql.cmd                # MySQL-compatible client shim
+├── mysqladmin.cmd           # MySQL admin shim
+└── loom.cmd                 # Envloom CLI shim
+```
+
+<Tip>
+  The `bin` directory is added to your system PATH automatically, making all shims globally accessible from any terminal.
+</Tip>
+
+### Shims Explained
+
+Shims are small batch files that route commands to the appropriate runtime version:
+
+```batch bin/php.cmd
+@ECHO OFF
+"%~dp0php\current\php.exe" %*
+```
+
+This allows you to run `php` from anywhere and automatically use the currently active version.
+
+### Version Junctions
+
+The `current` directories are Windows junctions (symbolic links) that point to the active runtime version. When you switch versions via UI or CLI, Envloom updates these junctions.
+
+```bash
+# Example: current points to 8.3
+bin/php/current → bin/php/8.3
+```
+
+## config/ - Configuration Templates
+
+Configuration templates are stored here and applied to runtime installations:
+
+```plaintext
+config/
+├── php/
+│   ├── php.ini              # Base php.ini template
+│   ├── 8.1.ini              # PHP 8.1 overrides
+│   ├── 8.2.ini              # PHP 8.2 overrides
+│   └── 8.3.ini              # PHP 8.3 overrides
+└── mariadb/
+    └── my.cnf               # Base MariaDB config template
+```
+
+### PHP Configuration Templates
+
+Envloom uses a layered configuration approach for PHP:
+
+1. **Base template** (`php.ini`): Contains required extensions and common settings
+2. **Version-specific overrides** (`8.1.ini`, `8.2.ini`, etc.): Optional customizations per major version
+3. **Runtime logging block**: Automatically injected with paths to version-specific logs
+4. **Managed values block**: Auto-generated from UI settings (memory limit, upload size)
+
+When you modify PHP settings in the UI or edit these templates, Envloom regenerates the final `php.ini` in each runtime's directory.
+
+<Warning>
+  Don't edit `php.ini` files directly in `bin/php/<version>/php.ini`. Instead, modify the templates in `config/php/` so changes persist across runtime updates.
+</Warning>
+
+### MariaDB Configuration Template
+
+The `my.cnf` template contains:
+
+- Port configuration
+- Root password (for client connections)
+- Log file paths
+- Performance settings
+
+This template is copied to `bin/mariadb/<version>/my.ini` for each installed MariaDB version.
+
+## logs/ - Centralized Logging
+
+All service and runtime logs are centralized in the `logs` directory:
+
+```plaintext
+logs/
+├── runtime.log              # Envloom application log
+├── php/
+│   ├── php-8_1.error.log    # PHP 8.1 error log
+│   ├── php-8_2.error.log    # PHP 8.2 error log
+│   └── php-8_3.error.log    # PHP 8.3 error log
+├── nginx/
+│   ├── access.log           # Global Nginx access log
+│   ├── error.log            # Global Nginx error log
+│   ├── example.test.access.log    # Site-specific access
+│   └── example.test.error.log     # Site-specific errors
+└── mariadb/
+    ├── mariadb.error.log    # MariaDB error log
+    ├── mariadb.general.log  # Query log (if enabled)
+    └── mariadb.slow.log     # Slow query log
+```
+
+<Tip>
+  Access all logs through the desktop UI's **Logs** page, which provides real-time viewing with automatic refresh.
+</Tip>
+
+### Log File Rotation
+
+Envloom does not automatically rotate logs. For production-like environments, consider implementing manual log rotation or cleanup:
+
+```bash
+# Clear all logs (PowerShell)
+Remove-Item -Path "C:\Path\To\Envloom\logs\**\*.log" -Force
+```
+
+## sites/ - Site Configuration
+
+Per-site nginx configurations, SSL certificates, and local CA are stored here:
+
+```plaintext
+sites/
+├── example.test.conf        # Nginx vhost for example.test
+├── another.test.conf        # Nginx vhost for another.test
+├── ca/
+│   ├── EnvloomCA.pem        # Local Certificate Authority cert
+│   └── EnvloomCA.key        # Local CA private key
+└── certs/
+    ├── example.test.crt
+    ├── example.test.key
+    ├── another.test.crt
+    └── another.test.key
+```
+
+### Nginx Site Configurations
+
+Each linked site gets a dedicated `.conf` file with:
+
+- Server name (domain)
+- Document root path
+- PHP-FPM upstream configuration (version-specific port)
+- SSL certificate paths
+- Access and error log paths
+
+<Accordion title="Example site configuration" icon="code">
+```nginx example.test.conf
+server {
+    listen 80;
+    listen 443 ssl;
+    server_name example.test;
+    root "C:/Projects/example/public";
+    index index.php index.html;
+
+    ssl_certificate "C:/Envloom/sites/certs/example.test.crt";
+    ssl_certificate_key "C:/Envloom/sites/certs/example.test.key";
+
+    access_log "C:/Envloom/logs/nginx/example.test.access.log";
+    error_log "C:/Envloom/logs/nginx/example.test.error.log";
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9083;  # PHP 8.3 port
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+}
+```
+</Accordion>
+
+### SSL Certificates
+
+Envloom maintains a local Certificate Authority (CA) in `sites/ca/` and generates per-site certificates in `sites/certs/`. When you enable SSL for a site:
+
+1. A certificate is generated and signed by the local CA
+2. The CA certificate is installed in the Windows Trusted Root store (with UAC prompt)
+3. The site certificate is referenced in the nginx configuration
+
+<Note>
+  You only need to trust the CA certificate once. All site certificates will then be automatically trusted.
+</Note>
+
+## Global Configuration
+
+The global application settings file is stored outside the Envloom installation directory:
+
+```plaintext
+%USERPROFILE%\.envloom\config.json
+```
+
+This contains settings like:
+
+- `autoStartServices`
+- `autoUpdate`
+- `startWithWindows`
+- `startMinimized`
+
+See [Global Settings](/configuration/settings) for detailed documentation.
+
+## PATH Management
+
+<Warning>
+  Envloom manages your system PATH automatically. Manual modifications are not recommended.
+</Warning>
+
+On first run, Envloom adds a single entry to your user PATH:
+
+```plaintext
+C:\Path\To\Envloom\bin
+```
+
+This single entry exposes all shims (PHP, Node, Composer, MySQL, etc.) globally. When you switch runtime versions, the shims automatically route to the new version—no PATH changes required.
+
+### Verifying PATH
+
+Check if Envloom's bin directory is in your PATH:
+
+```bash
+echo %PATH%
+```
+
+Or test a shim directly:
+
+```bash
+where php
+# Should output: C:\Path\To\Envloom\bin\php.cmd
+```
+
+## Cleanup and Maintenance
+
+### Removing Old Runtime Versions
+
+Old runtime installations can be removed via:
+
+- **UI**: Navigate to the runtime page (PHP/Node/MariaDB) and click **Uninstall** on unused versions
+- **Manual**: Delete the version directory from `bin/<runtime>/<version>`
+
+### Clearing Download Cache
+
+Temporary downloads are stored in `bin/_downloads/` and usually auto-cleaned after extraction. To manually clear:
+
+```bash
+Remove-Item -Path "C:\Path\To\Envloom\bin\_downloads\*" -Recurse -Force
+```
+
+### Orphaned Site Configs
+
+When you delete a site from Envloom, the nginx `.conf` file and logs are automatically removed. If manual cleanup is needed:
+
+```bash
+# Remove a specific site config
+Remove-Item "C:\Path\To\Envloom\sites\example.test.conf"
+
+# Remove associated logs
+Remove-Item "C:\Path\To\Envloom\logs\nginx\example.test.*"
+```
+
+## Related Topics
+
+<CardGroup cols={2}>
+  <Card title="Global Settings" icon="gear" href="/configuration/settings">
+    Configure auto-start, auto-update, and Windows integration
+  </Card>
+  <Card title="Per-Site Config" icon="file-code" href="/configuration/per-site-config">
+    Override PHP versions and settings per project
+  </Card>
+  <Card title="Viewing Logs" icon="file-lines" href="/troubleshooting/logs">
+    Access and interpret Envloom's logging system
+  </Card>
+</CardGroup>
