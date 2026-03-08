@@ -1,0 +1,96 @@
+{
+  "projectType": "saas",
+  "projectName": "Envloom",
+  "projectDescription": "A local development stack manager for Windows with versioned runtimes, per-site config, local SSL, and a desktop-first workflow.",
+  "theme": "aspen",
+  "primaryColor": "#8bcb3e",
+  "lightColor": "#0c3014",
+  "darkColor": "#5dba1e",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/runtimes",
+              "features/sites",
+              "features/services",
+              "features/ssl-networking"
+            ]
+          },
+          {
+            "group": "Runtimes",
+            "pages": [
+              "runtimes/php",
+              "runtimes/nodejs",
+              "runtimes/mariadb",
+              "runtimes/nginx"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/settings",
+              "configuration/paths",
+              "configuration/per-site-config"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "troubleshooting/common-issues",
+              "troubleshooting/logs",
+              "troubleshooting/debugging"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "CLI Reference",
+        "groups": [
+          {
+            "group": "Commands",
+            "pages": [
+              "cli/overview",
+              "cli/runtime-management",
+              "cli/site-management",
+              "cli/service-control"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-version runtime management (PHP, Node.js, MariaDB, Nginx)",
+    "Per-site configuration with custom PHP versions and SSL",
+    "Automated local SSL certificates with local CA",
+    "Service lifecycle management with auto-start options",
+    "Desktop dashboard with system tray integration",
+    "CLI tool for project-level runtime switching",
+    "Laravel site scaffolding with starter kits",
+    "Centralized logging and diagnostics",
+    "Windows startup integration"
+  ],
+  "publicApiSurface": [
+    "loom current - Show current runtime versions",
+    "loom list <runtime> - List available versions",
+    "loom link - Link existing project",
+    "loom unlink - Unlink current project",
+    "loom ssl on|off - Toggle SSL for current site",
+    "loom php <version> - Switch PHP version",
+    "loom node <version> - Switch Node.js version",
+    "Desktop UI - Dashboard, runtime pages, sites, logs, settings",
+    "System Tray - Quick actions, runtime switching, site links"
+  ]
+}
